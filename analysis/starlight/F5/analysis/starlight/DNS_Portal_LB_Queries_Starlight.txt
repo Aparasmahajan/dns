@@ -1,0 +1,46 @@
+SBI DNS Front-End Portal - Queries for Load Balancer Team
+Prepared by: Starlight Data Solutions
+
+Background:
+The DNS Management Portal will be hosted on Bank VMs at DC (active) and DR (standby), with 2 application nodes at each site. We need the portal published through the Bank load balancer with one common URL that moves to DR if DC goes down. The detailed list of what we need is in the attached prerequisites sheet. Below are the points where we need your inputs/confirmation.
+
+
+A. Platform and process
+
+1. Who will configure the global URL / GSLB for the portal - your team, or the F5 team as part of the new F5 DNS setup? We want to make sure it is not left out between the two teams.
+
+2. Do you have a naming standard for VIPs, pools, monitors and profiles? If yes, please share so we can follow it in our documents.
+
+B. Health check and failover
+
+3. DC and DR have same lb or different for each. How HA of LB has been configured?
+
+4. Can automatic failback be disabled? We want traffic to go back to DC only in a planned window, not automatically.
+
+5. What is the minimum TTL allowed on a GSLB-resolved name? We are looking at around 30 seconds.
+
+C. SSL / TLS
+
+6. RFP clause J3.5 asks for TLS 1.3 or higher. Does the LB support TLS 1.3 on the client side? Please share the supported TLS versions and cipher list. Can TLS 1.2 be disabled on this VIP if required?
+
+7. Our preference is SSL offload at the VIP and re-encryption towards the portal nodes. Is that okay as per your standard, or do you follow SSL passthrough for such applications?
+
+D. Security
+
+8. Is a WAF module available and licensed on this LB? Can we have a policy on the portal VIP in learning mode during UAT and blocking mode before go-live?
+
+9. Can rate limiting / DoS protection be applied on specific URLs (login and API)?
+
+10. Is the X-Forwarded-For header enabled for this LB? Do we need the real user IP in the portal audit logs?
+
+11. Can access to the portal VIP be restricted to Bank internal IP ranges at the LB level?
+
+E. Network and logs
+
+12. Please share the source IPs (SNAT pool / self IPs / monitor source) that will hit the portal nodes, so we can whitelist them on the server firewall.
+
+F. UAT and testing
+
+13. Can we get a separate UAT VIP and URL with the same configuration as production? Which site will UAT be at?
+
+Kindly fill the LB Team Remarks column in the prerequisites sheet along with your replies. If it is easier, we can also set up a short call to go through these together.

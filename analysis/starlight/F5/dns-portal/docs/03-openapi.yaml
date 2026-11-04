@@ -1,0 +1,1501 @@
+openapi: 3.1.0
+info:
+  title: SBI F5 DNS Management Portal API
+  version: 3.2.0
+  description: |
+    Contract for the portal UI and Bank automation clients (RFP J2.2).
+    v2.2 model (Proposal v2.2): local login + Bank LDAP, no SSO/MFA; Read (all groups) / Write (assigned groups) /
+    Checker (Read + Write, all groups, direct changes without approval); record versioning & rollback; F5 error per site.
+    - Auth: session cookie (`__Host-sid`, UI) from `POST /auth/login`, or a portal-issued API key in `X-API-Key` (automation).
+      Login order: configured Admin → LOCAL user (Argon2id) → LDAP user / unknown user via the Bank LDAP/directory API.
+      Unknown users validated by LDAP are created as `PENDING_ACCESS` with no permissions until the Admin maps them.
+    - Access level per user: READ (all groups) | WRITE (Admin-assigned groups; CRs need approval) | CHECK (always
+      READ + WRITE on all groups; approves WRITE users' CRs; own CRs are direct, no approval). The single Admin = CHECK
+      plus user/group/permission management, compare and rollback; Admin CRs and rollbacks are direct too.
+      WRITE users cannot approve.
+    - If an F5 change fails, `/change-requests/{crId}/executions` returns the F5 response per site
+      (`f5HttpStatus`, `f5ErrorCode`, `f5ErrorMessage`) exactly as returned; visible to the maker, Checkers and Admin.
+    - All POSTs accept `Idempotency-Key`; replays return the original response.
+    - Lists use keyset pagination (`cursor`, `limit` ≤ 200). No offsets.
+    - Updates to records/CRs use `If-Match: <version>`.
+    - Errors are RFC 9457 `application/problem+json`.
+    - F5 writes are always asynchronous: CR endpoints return state; progress via `/executions` or SSE `/events`.
+servers:
+  - url: https://dnsportal.sbi.internal/api/v1
+security:
+  - session: []
+  - apiKey: []
+tags:
+  - name: auth
+  - name: inventory
+  - name: version
+  - name: change
+  - name: approval
+  - name: grouping
+  - name: users
+  - name: report
+  - name: audit
+  - name: admin
+  - name: system
+
+paths:
+  # ───────── auth ─────────
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Username + password login (Admin from config → LOCAL hash → Bank LDAP). Sets the session cookie.
+      description: |
+        Failures always return `INVALID_CREDENTIALS` (no user enumeration). After `login.max_attempts` (default 5)
+        consecutive failures the account is locked for `login.lock_minutes` (default 15) → `ACCOUNT_LOCKED`.
+        An unknown username that LDAP validates is created as `PENDING_ACCESS`; the login succeeds but `Me.status`
+        is `PENDING_ACCESS` and every data endpoint returns `ACCESS_PENDING` until the Admin grants permissions.
+        If LDAP is unavailable, LDAP users get `DEPENDENCY_UNAVAILABLE`; Admin and LOCAL logins are unaffected.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginInput' }
+      responses:
+        '200':
+          description: 'Session cookie `__Host-sid` set'
+          headers:
+            Set-Cookie: { schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Me' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '423': { $ref: '#/components/responses/Locked' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/DependencyUnavailable' }
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Revoke current session
+      responses:
+        '204': { description: Logged out }
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Current user, status, admin flag and permission grants
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Me' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /auth/change-password:
+    post:
+      operationId: changePassword
+      tags: [auth]
+      summary: Change own password (LOCAL users only; required when mustChangePassword = true)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword: { type: string, format: password }
+                newPassword: { type: string, format: password, minLength: 12, description: 'Bank IS password policy applies' }
+      responses:
+        '204': { description: Password changed; other sessions revoked }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # ───────── inventory ─────────
+  /zones:
+    get:
+      operationId: getZones
+      tags: [inventory]
+      summary: List zones visible to caller
+      parameters:
+        - { name: q, in: query, schema: { type: string } }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - properties:
+                      items: { type: array, items: { $ref: '#/components/schemas/Zone' } }
+  /zones/{zoneId}:
+    parameters: [ { $ref: '#/components/parameters/ZoneId' } ]
+    get:
+      operationId: getZone
+      tags: [inventory]
+      summary: Zone detail incl. per-target sync status
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Zone' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /zones/{zoneId}/sync:
+    parameters: [ { $ref: '#/components/parameters/ZoneId' } ]
+    post:
+      operationId: syncZone
+      tags: [inventory]
+      summary: Force resync from F5 (IXFR, or AXFR when full=true)
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - { name: full, in: query, schema: { type: boolean, default: false } }
+      responses:
+        '202':
+          description: Sync job accepted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JobAccepted' }
+  /records:
+    get:
+      operationId: getRecords
+      tags: [inventory]
+      summary: Search/list records (READ and CHECK see all groups; WRITE filtered to assigned groups; only the Admin sees Unassigned)
+      description: |
+        `q` supports `name:*.app.sbi.co.in type:A ip:10.1.0.0/16 group:TREASURY ttl<300 tag:prod`.
+      parameters:
+        - { name: q, in: query, schema: { type: string, maxLength: 500 } }
+        - { name: zoneId, in: query, schema: { type: integer, format: int64 } }
+        - { name: type, in: query, schema: { $ref: '#/components/schemas/RrType' } }
+        - { name: groupId, in: query, schema: { type: integer } }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - properties:
+                      items: { type: array, items: { $ref: '#/components/schemas/Record' } }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /records/{zoneId}/{recordId}:
+    parameters:
+      - $ref: '#/components/parameters/ZoneId'
+      - { name: recordId, in: path, required: true, schema: { type: integer, format: int64 } }
+    get:
+      operationId: getRecord
+      tags: [inventory]
+      summary: Record detail (ETag = version)
+      responses:
+        '200':
+          description: OK
+          headers:
+            ETag: { schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Record' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /records/{zoneId}/{recordId}/history:
+    parameters:
+      - $ref: '#/components/parameters/ZoneId'
+      - { name: recordId, in: path, required: true, schema: { type: integer, format: int64 } }
+    get:
+      operationId: getRecordHistory
+      tags: [inventory]
+      summary: Observed-change history (portal changes and drift; technical log, not the business versions)
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - properties:
+                      items: { type: array, items: { $ref: '#/components/schemas/RecordHistory' } }
+  /records/{zoneId}/{recordId}/owner-group:
+    parameters:
+      - $ref: '#/components/parameters/ZoneId'
+      - $ref: '#/components/parameters/RecordId'
+    put:
+      operationId: setRecordOwnerGroup
+      tags: [grouping]
+      summary: Assign / move a record to its single owning DNS group (Admin only; null = Unassigned)
+      parameters: [ { $ref: '#/components/parameters/IfMatch' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [groupId]
+              properties:
+                groupId: { type: [integer, 'null'] }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Record' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+
+  # ───────── record versions ─────────
+  /records/{zoneId}/{recordId}/versions:
+    parameters:
+      - $ref: '#/components/parameters/ZoneId'
+      - $ref: '#/components/parameters/RecordId'
+    get:
+      operationId: getRecordVersions
+      tags: [version]
+      summary: Business versions 1.0, 1.1, … (newest first). Readable with READ on the record's group.
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - properties:
+                      items: { type: array, items: { $ref: '#/components/schemas/RecordVersion' } }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /records/{zoneId}/{recordId}/versions/compare:
+    parameters:
+      - $ref: '#/components/parameters/ZoneId'
+      - $ref: '#/components/parameters/RecordId'
+    get:
+      operationId: compareRecordVersions
+      tags: [version]
+      summary: Field-level diff between two versions, or a version and the live F5 configuration (Admin only)
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: integer, minimum: 0 }, description: 'version_no (3 = "1.3")' }
+        - { name: to, in: query, required: true, schema: { oneOf: [ { type: integer, minimum: 0 }, { type: string, enum: [live] } ] }, description: 'version_no, or "live" = read current config from F5' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VersionDiff' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/DependencyUnavailable' }
+  /records/{zoneId}/{recordId}/versions/{versionNo}:
+    parameters:
+      - $ref: '#/components/parameters/ZoneId'
+      - $ref: '#/components/parameters/RecordId'
+      - { name: versionNo, in: path, required: true, schema: { type: integer, minimum: 0 } }
+    get:
+      operationId: getRecordVersion
+      tags: [version]
+      summary: One version with its full configuration snapshot
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RecordVersion' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /records/{zoneId}/{recordId}/rollback:
+    parameters:
+      - $ref: '#/components/parameters/ZoneId'
+      - $ref: '#/components/parameters/RecordId'
+    post:
+      operationId: rollbackRecord
+      tags: [version]
+      summary: Roll a record back to a previous version, immediately or at runAt (Admin only)
+      description: |
+        Creates a direct CR of kind ROLLBACK (no approval, like other Admin changes) that is executed immediately or
+        at runAt after validation. At execution the portal re-validates and re-checks live F5 for drift; on success a NEW version
+        is committed (at 1.3, rolling back to 1.1 creates 1.4 with 1.1's configuration). History is never rewritten.
+        Restoring a DELETE version re-creates the record.
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RollbackInput' }
+      responses:
+        '201':
+          description: Rollback CR created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChangeRequest' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /records/export:
+    post:
+      operationId: exportRecords
+      tags: [inventory]
+      summary: Async export (CSV/XLSX) of a search result
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [format]
+              properties:
+                q: { type: string }
+                zoneId: { type: integer, format: int64 }
+                format: { type: string, enum: [CSV, XLSX] }
+      responses:
+        '202':
+          description: Export job accepted; download link via /jobs/{jobId}
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JobAccepted' }
+
+  # ───────── change ─────────
+  /validate:
+    post:
+      operationId: validateItems
+      tags: [change]
+      summary: Dry-run validation of change items (no CR created)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items: { type: array, maxItems: 500, items: { $ref: '#/components/schemas/ChangeItemInput' } }
+      responses:
+        '200':
+          description: Validation result (may contain WARN/ERROR)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  valid: { type: boolean }
+                  results: { type: array, items: { $ref: '#/components/schemas/ValidationResult' } }
+  /change-requests:
+    get:
+      operationId: getChangeRequests
+      tags: [change]
+      summary: List CRs visible to caller
+      parameters:
+        - { name: status, in: query, schema: { type: array, items: { $ref: '#/components/schemas/CrStatus' } }, style: form, explode: false }
+        - { name: mine, in: query, schema: { type: boolean } }
+        - { name: groupId, in: query, schema: { type: integer } }
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time } }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - properties:
+                      items: { type: array, items: { $ref: '#/components/schemas/ChangeRequestSummary' } }
+    post:
+      operationId: createChangeRequest
+      tags: [change]
+      summary: Create CR (DRAFT, or submitted directly when submit=true)
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChangeRequestInput' }
+      responses:
+        '201':
+          description: Created
+          headers:
+            Location: { schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChangeRequest' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/IdempotencyReused' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /change-requests/bulk:
+    post:
+      operationId: createBulkChangeRequest
+      tags: [change]
+      summary: Bulk CR from CSV (≤ 10,000 rows, ≤ 20 MB). Validated asynchronously.
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, title, justification]
+              properties:
+                file: { type: string, contentMediaType: text/csv }
+                title: { type: string }
+                justification: { type: string }
+                runAt: { type: string, format: date-time }
+      responses:
+        '202':
+          description: CR created in VALIDATING; poll CR or subscribe to SSE
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChangeRequestSummary' }
+  /change-requests/{crId}:
+    parameters: [ { $ref: '#/components/parameters/CrId' } ]
+    get:
+      operationId: getChangeRequest
+      tags: [change]
+      summary: CR detail with items, validation, approvals, ITSM link
+      responses:
+        '200':
+          description: OK
+          headers:
+            ETag: { schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChangeRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      operationId: updateChangeRequest
+      tags: [change]
+      summary: Edit a DRAFT CR
+      parameters: [ { $ref: '#/components/parameters/IfMatch' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChangeRequestInput' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChangeRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+  /change-requests/{crId}/submit:
+    parameters: [ { $ref: '#/components/parameters/CrId' } ]
+    post:
+      operationId: submitChangeRequest
+      tags: [change]
+      summary: DRAFT → VALIDATING → PENDING_APPROVAL (WRITE maker) or → APPROVED/SCHEDULED/QUEUED (direct, CHECK or Admin maker)
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IfMatch' } ]
+      responses:
+        '200': { $ref: '#/components/responses/CrOk' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /change-requests/{crId}/approve:
+    parameters: [ { $ref: '#/components/parameters/CrId' } ]
+    post:
+      operationId: approveChangeRequest
+      tags: [approval]
+      summary: Approve a WRITE user's CR (any one Checker or the Admin; WRITE users get FORBIDDEN_SCOPE)
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IfMatch' } ]
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Decision' }
+      responses:
+        '200': { $ref: '#/components/responses/CrOk' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /change-requests/{crId}/reject:
+    parameters: [ { $ref: '#/components/parameters/CrId' } ]
+    post:
+      operationId: rejectChangeRequest
+      tags: [approval]
+      summary: Reject a WRITE user's CR (any one Checker or the Admin; comment mandatory)
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IfMatch' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/Decision'
+                - required: [comment]
+      responses:
+        '200': { $ref: '#/components/responses/CrOk' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /change-requests/{crId}/cancel:
+    parameters: [ { $ref: '#/components/parameters/CrId' } ]
+    post:
+      operationId: cancelChangeRequest
+      tags: [change]
+      summary: Cancel (maker, before QUEUED)
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IfMatch' } ]
+      responses:
+        '200': { $ref: '#/components/responses/CrOk' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /change-requests/{crId}/executions:
+    parameters: [ { $ref: '#/components/parameters/CrId' } ]
+    get:
+      operationId: getChangeRequestExecutions
+      tags: [change]
+      summary: Per-target (site), per-item execution status, incl. the F5 error response when a change fails
+      responses:
+        '200':
+          description: OK
+          headers:
+            Retry-After: { description: Suggested poll interval (s) while EXECUTING, schema: { type: integer } }
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Execution' }
+  /approvals/inbox:
+    get:
+      operationId: getApprovalsInbox
+      tags: [approval]
+      summary: PENDING_APPROVAL CRs raised by WRITE users (Checkers and the Admin; all groups)
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - properties:
+                      items: { type: array, items: { $ref: '#/components/schemas/ChangeRequestSummary' } }
+
+  # ───────── DNS groups / users & permissions / policy ─────────
+  /groups:
+    get:
+      operationId: getGroups
+      tags: [grouping]
+      summary: List DNS groups (READ, CHECK and the Admin see all; WRITE users see their assigned groups)
+      parameters:
+        - { name: kind, in: query, schema: { $ref: '#/components/schemas/GroupKind' } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/LogicalGroup' } }
+    post:
+      operationId: createGroup
+      tags: [grouping]
+      summary: Create DNS group (Admin only)
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LogicalGroup' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LogicalGroup' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /groups/{groupId}:
+    parameters: [ { $ref: '#/components/parameters/GroupId' } ]
+    patch:
+      operationId: updateGroup
+      tags: [grouping]
+      summary: Rename / deactivate a DNS group (Admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                parentId: { type: [integer, 'null'] }
+                isActive: { type: boolean }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LogicalGroup' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /groups/{groupId}/rules:
+    parameters: [ { $ref: '#/components/parameters/GroupId' } ]
+    put:
+      operationId: replaceGroupRules
+      tags: [grouping]
+      summary: Replace auto-assign rules (Admin only). Used only to set the owner of NEW records found by sync.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: array, items: { $ref: '#/components/schemas/GroupRule' } }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/GroupRule' } }
+  /admin/users:
+    get:
+      operationId: getUsers
+      tags: [users]
+      summary: List users (Admin only). Filter status=PENDING_ACCESS for the pending-users queue.
+      parameters:
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/UserStatus' } }
+        - { name: source, in: query, schema: { $ref: '#/components/schemas/UserSource' } }
+        - { name: q, in: query, schema: { type: string } }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - properties:
+                      items: { type: array, items: { $ref: '#/components/schemas/User' } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      operationId: createUser
+      tags: [users]
+      summary: Create a LOCAL user with a temporary password (mustChangePassword = true) (Admin only)
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UserCreate' }
+      responses:
+        '201':
+          description: Created (temporary password shown once)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/User'
+                  - type: object
+                    properties:
+                      temporaryPassword: { type: string, format: password }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /admin/users/{userId}:
+    parameters: [ { $ref: '#/components/parameters/UserId' } ]
+    get:
+      operationId: getUser
+      tags: [users]
+      summary: User detail with permission grants (Admin only)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      operationId: updateUser
+      tags: [users]
+      summary: Edit display fields, set ACTIVE / DISABLED, or unlock (Admin only). The CONFIG Admin is read-only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UserPatch' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /admin/users/{userId}/reset-password:
+    parameters: [ { $ref: '#/components/parameters/UserId' } ]
+    post:
+      operationId: resetUserPassword
+      tags: [users]
+      summary: Issue a new temporary password to a LOCAL user (Admin only); revokes the user's sessions
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
+      responses:
+        '200':
+          description: Temporary password (shown once)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  temporaryPassword: { type: string, format: password }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /admin/users/{userId}/permissions:
+    parameters: [ { $ref: '#/components/parameters/UserId' } ]
+    put:
+      operationId: replaceUserPermissions
+      tags: [users]
+      summary: Replace the user's access level (Admin only). READ / CHECK = one grant with groupId null (all groups); WRITE = one grant per assigned group.
+      description: |
+        One access level per user (mixing levels → INVALID_SCOPE). Granting access to a PENDING_ACCESS user moves them
+        to ACTIVE. Not allowed on the CONFIG Admin (ADMIN_READONLY).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: array, items: { $ref: '#/components/schemas/PermissionGrant' } }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /approval-policies:
+    get:
+      operationId: getApprovalPolicies
+      tags: [approval]
+      summary: Maker-checker policies (J1.8/J1.9)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/ApprovalPolicy' } }
+    put:
+      operationId: upsertApprovalPolicy
+      tags: [approval]
+      summary: Upsert policy for a DNS group (Admin only; default 1 level × 1 approver)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ApprovalPolicy' }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApprovalPolicy' }
+  /change-windows:
+    get:
+      operationId: getChangeWindows
+      tags: [approval]
+      summary: Change windows and freeze periods
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/ChangeWindow' } }
+    post:
+      operationId: createChangeWindows
+      tags: [approval]
+      summary: Create window / freeze
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChangeWindow' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChangeWindow' }
+
+  # ───────── reports / audit / drift ─────────
+  /reports/records-by-group:
+    get:
+      operationId: getReportsRecordsByGroup
+      tags: [report]
+      summary: Records per department / logical group (J1.11)
+      parameters:
+        - { name: kind, in: query, schema: { $ref: '#/components/schemas/GroupKind' } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    groupId: { type: integer }
+                    groupName: { type: string }
+                    byType: { type: object, additionalProperties: { type: integer } }
+                    total: { type: integer }
+  /reports/change-summary:
+    get:
+      operationId: getReportsChangeSummary
+      tags: [report]
+      summary: CR throughput, approval SLA, success/failure rates
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date } }
+        - { name: groupId, in: query, schema: { type: integer } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /audit-events:
+    get:
+      operationId: getAuditEvents
+      tags: [audit]
+      summary: Query audit trail (Admin; other users see events for their own CRs)
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date-time } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date-time } }
+        - { name: action, in: query, schema: { type: string } }
+        - { name: actorId, in: query, schema: { type: integer, format: int64 } }
+        - { name: entityType, in: query, schema: { type: string } }
+        - { name: entityId, in: query, schema: { type: string } }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - properties:
+                      items: { type: array, items: { $ref: '#/components/schemas/AuditEvent' } }
+  /drift-events:
+    get:
+      operationId: getDriftEvents
+      tags: [inventory]
+      summary: Out-of-band changes detected on F5
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [OPEN, ADOPTED, REVERTED, IGNORED] } }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - properties:
+                      items: { type: array, items: { $ref: '#/components/schemas/DriftEvent' } }
+  /drift-events/{driftId}/resolve:
+    post:
+      operationId: resolveDriftEvent
+      tags: [inventory]
+      summary: ADOPT (accept F5), REVERT (creates CR), or IGNORE
+      parameters:
+        - { name: driftId, in: path, required: true, schema: { type: integer, format: int64 } }
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action, comment]
+              properties:
+                action: { type: string, enum: [ADOPT, REVERT, IGNORE] }
+                comment: { type: string }
+      responses:
+        '200':
+          description: Resolved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DriftEvent' }
+
+  # ───────── admin / system ─────────
+  /admin/targets:
+    get:
+      operationId: getAdminTargets
+      tags: [admin]
+      summary: F5 targets with health and circuit state
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/F5Target' } }
+  /admin/integrations/health:
+    get:
+      operationId: getAdminIntegrationsHealth
+      tags: [admin]
+      summary: Health of Bank LDAP/directory API, ITSM, SIEM, F5 targets, queue depth, replication lag
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /jobs/{jobId}:
+    get:
+      operationId: getJob
+      tags: [system]
+      summary: Async job status (exports, syncs, re-materialisation)
+      parameters: [ { name: jobId, in: path, required: true, schema: { type: string } } ]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+                  status: { type: string, enum: [QUEUED, RUNNING, SUCCEEDED, FAILED] }
+                  resultUrl: { type: string }
+                  error: { type: string }
+  /events:
+    get:
+      operationId: streamEvents
+      tags: [system]
+      summary: Server-Sent Events stream (cr.status, exec.progress, drift.detected, sync.done) filtered by caller scope
+      responses:
+        '200':
+          description: SSE stream
+          content:
+            text/event-stream:
+              schema: { type: string }
+  /healthz:
+    get:
+      operationId: getHealthz
+      tags: [system]
+      summary: Liveness
+      security: []
+      responses:
+        '200': { description: Alive }
+  /readyz:
+    get:
+      operationId: getReadyz
+      tags: [system]
+      summary: Readiness — true only when the DB primary is writable from this site (used by GSLB)
+      security: []
+      responses:
+        '200': { description: Ready }
+        '503': { description: Not ready }
+
+components:
+  securitySchemes:
+    session:
+      type: apiKey
+      in: cookie
+      name: __Host-sid
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: Portal-issued key (Argon2id-hashed at rest, IP allow-list, same READ / WRITE / CHECK access model as users)
+
+  parameters:
+    Cursor: { name: cursor, in: query, schema: { type: string } }
+    Limit: { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+    ZoneId: { name: zoneId, in: path, required: true, schema: { type: integer, format: int64 } }
+    RecordId: { name: recordId, in: path, required: true, schema: { type: integer, format: int64 } }
+    GroupId: { name: groupId, in: path, required: true, schema: { type: integer } }
+    UserId: { name: userId, in: path, required: true, schema: { type: integer, format: int64 } }
+    CrId: { name: crId, in: path, required: true, schema: { type: integer, format: int64 } }
+    IdempotencyKey: { name: Idempotency-Key, in: header, schema: { type: string, maxLength: 128 } }
+    IfMatch: { name: If-Match, in: header, required: true, schema: { type: string } }
+
+  responses:
+    CrOk:
+      description: CR after transition
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ChangeRequest' }
+    ValidationFailed:
+      description: VALIDATION_FAILED
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Unauthorized:
+      description: UNAUTHENTICATED | INVALID_CREDENTIALS
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Locked:
+      description: ACCOUNT_LOCKED (see Retry-After)
+      headers:
+        Retry-After: { schema: { type: integer } }
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Forbidden:
+      description: FORBIDDEN_SCOPE | ACCESS_PENDING | ADMIN_ONLY
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    DependencyUnavailable:
+      description: DEPENDENCY_UNAVAILABLE (e.g. Bank LDAP/directory API or F5 unreachable)
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    NotFound:
+      description: NOT_FOUND
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Conflict:
+      description: INVALID_STATE | STALE_VERSION | DUPLICATE_OPEN_CR | ADMIN_READONLY | USERNAME_TAKEN
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    PreconditionFailed:
+      description: If-Match mismatch
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    IdempotencyReused:
+      description: IDEMPOTENCY_KEY_REUSED with a different body
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    RateLimited:
+      description: RATE_LIMITED
+      headers:
+        Retry-After: { schema: { type: integer } }
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+
+  schemas:
+    RrType:
+      type: string
+      enum: [A, AAAA, CNAME, MX, NS, PTR, TXT, SRV, CAA, DS, NAPTR, SOA]
+    CrStatus:
+      type: string
+      enum: [DRAFT, VALIDATING, PENDING_APPROVAL, APPROVED, SCHEDULED, QUEUED, EXECUTING, SUCCEEDED,
+             PARTIALLY_FAILED, FAILED, NEEDS_RECONCILIATION, REJECTED, CANCELLED]
+    CrKind:
+      type: string
+      enum: [CHANGE, ROLLBACK]
+    GroupKind:
+      type: string
+      enum: [DEPARTMENT, APPLICATION, LOCATION, USER_GROUP, CUSTOM]
+    PrincipalKind:
+      type: string
+      enum: [USER, API_CLIENT]
+    UserSource:
+      type: string
+      enum: [CONFIG, LOCAL, LDAP]
+      description: CONFIG = the single Admin (credentials in env/Vault, read-only via API)
+    UserStatus:
+      type: string
+      enum: [PENDING_ACCESS, ACTIVE, DISABLED, LOCKED]
+    Permission:
+      type: string
+      enum: [READ, WRITE, CHECK]
+      description: 'READ = view all groups. WRITE = READ + raise CRs (need approval) in assigned groups only. CHECK = READ + WRITE on all groups, approve/reject WRITE CRs, own CRs direct (no approval).'
+    PermissionGrant:
+      type: object
+      required: [permission]
+      properties:
+        groupId: { type: [integer, 'null'], description: 'Required for WRITE; must be null for READ and CHECK (= all groups)' }
+        groupName: { type: [string, 'null'], readOnly: true }
+        permission: { $ref: '#/components/schemas/Permission' }
+    LoginInput:
+      type: object
+      required: [username, password]
+      properties:
+        username: { type: string, maxLength: 256 }
+        password: { type: string, format: password, maxLength: 1024 }
+    User:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        username: { type: string }
+        displayName: { type: string }
+        email: { type: [string, 'null'] }
+        department: { type: [string, 'null'] }
+        source: { $ref: '#/components/schemas/UserSource' }
+        status: { $ref: '#/components/schemas/UserStatus' }
+        isAdmin: { type: boolean }
+        mustChangePassword: { type: boolean }
+        lockedUntil: { type: [string, 'null'], format: date-time }
+        lastLoginAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+        permissions: { type: array, items: { $ref: '#/components/schemas/PermissionGrant' } }
+    UserCreate:
+      type: object
+      required: [username, displayName]
+      properties:
+        username: { type: string, maxLength: 256 }
+        displayName: { type: string }
+        email: { type: string, format: email }
+        department: { type: string }
+        permissions: { type: array, items: { $ref: '#/components/schemas/PermissionGrant' } }
+      description: Creates a LOCAL user with mustChangePassword = true. The generated temporary password is returned once.
+    UserPatch:
+      type: object
+      properties:
+        displayName: { type: string }
+        email: { type: [string, 'null'], format: email }
+        department: { type: [string, 'null'] }
+        status: { type: string, enum: [ACTIVE, DISABLED] }
+        unlock: { type: boolean, description: 'Clears LOCKED, failedAttempts and lockedUntil' }
+    Page:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: {} }
+        nextCursor: { type: [string, 'null'] }
+        approxTotal: { type: [integer, 'null'], description: 'Estimate; capped at 10000' }
+    Problem:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        code:
+          type: string
+          enum: [VALIDATION_FAILED, UNAUTHENTICATED, INVALID_CREDENTIALS, ACCOUNT_LOCKED, ACCESS_PENDING,
+                 FORBIDDEN_SCOPE, ADMIN_ONLY, ADMIN_READONLY, INVALID_SCOPE, USERNAME_TAKEN, NOT_FOUND,
+                 INVALID_STATE, STALE_VERSION, DUPLICATE_OPEN_CR, PRECONDITION_FAILED, IDEMPOTENCY_KEY_REUSED,
+                 RATE_LIMITED, DEPENDENCY_UNAVAILABLE, INTERNAL]
+        detail: { type: string }
+        traceId: { type: string }
+        errors: { type: array, items: { $ref: '#/components/schemas/ValidationResult' } }
+    ValidationResult:
+      type: object
+      required: [code, severity, message]
+      properties:
+        itemIndex: { type: integer }
+        field: { type: string }
+        severity: { type: string, enum: [ERROR, WARN] }
+        code:
+          type: string
+          enum: [NAME_INVALID, NAME_OUTSIDE_ZONE, RDATA_INVALID, IP_INVALID, TTL_OUT_OF_RANGE, DUPLICATE_RECORD,
+                 DUPLICATE_OPEN_CR, CNAME_LOOP, CNAME_CHAIN_TOO_LONG, CNAME_COEXISTENCE, CNAME_AT_APEX,
+                 TARGET_IS_CNAME, PTR_MISMATCH, PROTECTED_RECORD, STALE_VERSION, NOT_IN_SCOPE, RECORD_NOT_FOUND,
+                 INVALID_SCOPE, MIXED_GROUPS, DRIFT_SINCE_VERSION]
+        message: { type: string }
+    Me:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        username: { type: string }
+        displayName: { type: string }
+        source: { $ref: '#/components/schemas/UserSource' }
+        status: { $ref: '#/components/schemas/UserStatus' }
+        isAdmin: { type: boolean, description: 'true = CHECK on all groups (direct changes) plus user/group/permission management, compare and rollback' }
+        mustChangePassword: { type: boolean }
+        permissions: { type: array, items: { $ref: '#/components/schemas/PermissionGrant' }, description: 'Empty for the Admin (implicit) and for PENDING_ACCESS users' }
+    Zone:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        fqdn: { type: string }
+        view: { type: string }
+        isReverse: { type: boolean }
+        targetMode: { type: string, enum: [SYNC_GROUP, EACH] }
+        driftPolicy: { type: string, enum: [ALERT_ONLY, ADOPT, REVERT] }
+        ttlMin: { type: integer }
+        ttlMax: { type: integer }
+        recordCount: { type: integer }
+        targets:
+          type: array
+          items:
+            type: object
+            properties:
+              targetCode: { type: string }
+              site: { type: string, enum: [DC, DR, AZ] }
+              isWriteTarget: { type: boolean }
+              lastSerial: { type: integer }
+              lastSyncAt: { type: string, format: date-time }
+              lastSyncStatus: { type: string }
+    Rdata:
+      type: object
+      description: Typed per rrType, e.g. A {address}, MX {preference, exchange}, SRV {priority, weight, port, target}, CAA {flags, tag, value}, TXT {strings[]}
+      additionalProperties: true
+    Record:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        zoneId: { type: integer, format: int64 }
+        name: { type: string }
+        type: { $ref: '#/components/schemas/RrType' }
+        ttl: { type: integer }
+        rdata: { $ref: '#/components/schemas/Rdata' }
+        rdataText: { type: string }
+        ownerGroupId: { type: [integer, 'null'], description: 'Single owning DNS group; null = Unassigned (Admin only)' }
+        ownerGroupName: { type: [string, 'null'] }
+        tags: { type: array, items: { type: string } }
+        isProtected: { type: boolean }
+        version: { type: integer, format: int64, description: 'Concurrency token (ETag); not the business version' }
+        currentVersion: { type: [string, 'null'], examples: ['1.3'], description: 'Latest business version label; null = never changed via the portal' }
+        lastSeenAt: { type: string, format: date-time }
+        openCrId: { type: [integer, 'null'], format: int64, description: 'Open CR touching this RRset, if any' }
+    RecordHistory:
+      type: object
+      properties:
+        version: { type: integer, format: int64 }
+        op: { type: string, enum: [CREATE, UPDATE, DELETE] }
+        before: { type: [object, 'null'] }
+        after: { type: [object, 'null'] }
+        crId: { type: [integer, 'null'], format: int64 }
+        observedAt: { type: string, format: date-time }
+    RecordVersion:
+      type: object
+      properties:
+        versionNo: { type: integer, minimum: 0, description: '0 = "1.0", 3 = "1.3", 10 = "1.10"' }
+        versionLabel: { type: string, examples: ['1.3'] }
+        op: { type: string, enum: [CREATE, UPDATE, DELETE, ROLLBACK] }
+        snapshot: { type: object, description: 'Full record configuration: zone, name, type, ttl, rdata, rdataText, F5 object config' }
+        ownerGroupId: { type: [integer, 'null'] }
+        crId: { type: integer, format: int64 }
+        crRef: { type: string }
+        maker: { type: [string, 'null'] }
+        checker: { type: [string, 'null'], description: 'Approver; null for direct changes (Checker / Admin)' }
+        reason: { type: [string, 'null'] }
+        itsmRef: { type: [string, 'null'] }
+        appliedAt: { type: string, format: date-time }
+        perSiteResult: { type: object, additionalProperties: { type: string } }
+        rolledBackFromVersionNo: { type: [integer, 'null'], description: 'ROLLBACK only: version whose snapshot was restored' }
+    VersionDiff:
+      type: object
+      properties:
+        from: { type: string, examples: ['1.1'] }
+        to: { type: string, examples: ['1.3', live] }
+        changes:
+          type: array
+          items:
+            type: object
+            required: [field, change]
+            properties:
+              field: { type: string, examples: [ttl, rdata.address] }
+              from: {}
+              to: {}
+              change: { type: string, enum: [ADDED, CHANGED, REMOVED] }
+        liveDrift: { type: boolean, description: 'true when to=live and F5 differs from the latest portal version' }
+    RollbackInput:
+      type: object
+      required: [targetVersionNo, reason]
+      properties:
+        targetVersionNo: { type: integer, minimum: 0 }
+        runAt: { type: [string, 'null'], format: date-time, description: 'null/absent = execute as soon as approved' }
+        reason: { type: string, maxLength: 4000 }
+        itsmRef: { type: string }
+    ChangeItemInput:
+      type: object
+      required: [zoneId, op, name, type]
+      properties:
+        zoneId: { type: integer, format: int64 }
+        op: { type: string, enum: [CREATE, UPDATE, DELETE] }
+        name: { type: string, maxLength: 253 }
+        type: { $ref: '#/components/schemas/RrType' }
+        recordId: { type: integer, format: int64, description: Required for UPDATE/DELETE }
+        expectedVersion: { type: integer, format: int64, description: Required for UPDATE/DELETE }
+        ttl: { type: integer }
+        rdata: { $ref: '#/components/schemas/Rdata' }
+    ChangeRequestInput:
+      type: object
+      required: [title, justification, items]
+      properties:
+        title: { type: string, maxLength: 200 }
+        justification: { type: string, maxLength: 4000 }
+        groupId: { type: integer, description: 'DNS group of the CR (caller needs WRITE on it). All items must belong to it; CREATE items become owned by it. Optional when inferable from UPDATE/DELETE items.' }
+        priority: { type: string, enum: [NORMAL, EMERGENCY], default: NORMAL }
+        runAt: { type: string, format: date-time }
+        itsmChangeRef: { type: string, description: Link existing CRQ instead of creating one }
+        submit: { type: boolean, default: true }
+        items: { type: array, minItems: 1, maxItems: 500, items: { $ref: '#/components/schemas/ChangeItemInput' } }
+    ChangeRequestSummary:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        ref: { type: string, examples: [DNS-2026-000123] }
+        kind: { $ref: '#/components/schemas/CrKind' }
+        title: { type: string }
+        groupId: { type: [integer, 'null'] }
+        groupName: { type: [string, 'null'] }
+        status: { $ref: '#/components/schemas/CrStatus' }
+        priority: { type: string }
+        itemCount: { type: integer }
+        maker: { type: string }
+        direct: { type: boolean, description: 'true = raised by a Checker or the Admin; executed without approval' }
+        currentLevel: { type: integer }
+        runAt: { type: [string, 'null'], format: date-time }
+        itsmChangeRef: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+        version: { type: integer }
+    ChangeRequest:
+      allOf:
+        - $ref: '#/components/schemas/ChangeRequestSummary'
+        - type: object
+          properties:
+            justification: { type: string }
+            items:
+              type: array
+              items:
+                allOf:
+                  - $ref: '#/components/schemas/ChangeItemInput'
+                  - type: object
+                    properties:
+                      seq: { type: integer }
+                      before: { type: [object, 'null'] }
+                      after: { type: [object, 'null'] }
+                      validation: { type: array, items: { $ref: '#/components/schemas/ValidationResult' } }
+            approvals:
+              type: array
+              items:
+                type: object
+                properties:
+                  level: { type: integer }
+                  approver: { type: string }
+                  action: { type: string, enum: [APPROVE, REJECT] }
+                  comment: { type: string }
+                  actedAt: { type: string, format: date-time }
+            pendingCheckers: { type: array, items: { type: string }, description: 'All Checkers plus the Admin; empty for direct CRs' }
+            rollbackTarget:
+              type: [object, 'null']
+              description: ROLLBACK CRs only
+              properties:
+                zoneId: { type: integer, format: int64 }
+                recordId: { type: integer, format: int64 }
+                targetVersionNo: { type: integer }
+                targetVersionLabel: { type: string }
+            failureReason: { type: [string, 'null'] }
+    Decision:
+      type: object
+      properties:
+        comment: { type: string, maxLength: 2000 }
+    Execution:
+      type: object
+      properties:
+        targetCode: { type: string }
+        site: { type: string }
+        zoneId: { type: integer, format: int64 }
+        batchNo: { type: integer }
+        status: { type: string, enum: [PENDING, RUNNING, SUCCEEDED, FAILED, CONFLICT, SKIPPED] }
+        attempts: { type: integer }
+        startedAt: { type: [string, 'null'], format: date-time }
+        finishedAt: { type: [string, 'null'], format: date-time }
+        errorCode: { type: [string, 'null'] }
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              seq: { type: integer }
+              status: { type: string }
+              errorCode: { type: [string, 'null'] }
+              f5HttpStatus: { type: [integer, 'null'], description: 'HTTP status of the F5 response for this site' }
+              f5ErrorCode: { type: [string, 'null'], description: 'Error code exactly as returned by F5' }
+              f5ErrorMessage: { type: [string, 'null'], description: 'Error message exactly as returned by F5; shown on the request page on failure' }
+              durationMs: { type: integer }
+    LogicalGroup:
+      type: object
+      required: [kind, code, name]
+      properties:
+        id: { type: integer, readOnly: true }
+        kind: { $ref: '#/components/schemas/GroupKind' }
+        code: { type: string }
+        name: { type: string }
+        parentId: { type: [integer, 'null'] }
+        recordCount: { type: integer, readOnly: true }
+    GroupRule:
+      type: object
+      required: [kind, value]
+      description: Auto-assign hint — sets the owning group of NEW records discovered by sync (first match by priority)
+      properties:
+        kind: { type: string, enum: [ZONE, NAME_GLOB, NAME_REGEX, IP_CIDR, TAG, RECORD] }
+        zoneId: { type: [integer, 'null'], format: int64 }
+        value: { type: string }
+        priority: { type: integer, default: 100 }
+    ApprovalPolicy:
+      type: object
+      required: [name, levels]
+      properties:
+        id: { type: integer, format: int64, readOnly: true }
+        groupId: { type: [integer, 'null'] }
+        name: { type: string }
+        levels:
+          type: array
+          minItems: 1
+          maxItems: 3
+          description: 'Applies to CRs raised by WRITE users only. Default one level, minApprovers 1. Approvers are all Checkers plus the Admin; one person decides at most one level.'
+          items:
+            type: object
+            required: [minApprovers]
+            properties:
+              minApprovers: { type: integer, minimum: 1, default: 1 }
+        requiresItsmApproved: { type: boolean }
+        requiresChangeWindow: { type: boolean }
+        autoApproveRule: { type: [object, 'null'] }
+        slaMinutes: { type: integer }
+    ChangeWindow:
+      type: object
+      required: [name, startsAt, endsAt]
+      properties:
+        id: { type: integer, format: int64, readOnly: true }
+        name: { type: string }
+        groupId: { type: [integer, 'null'] }
+        isFreeze: { type: boolean, default: false }
+        rrule: { type: [string, 'null'] }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time }
+    AuditEvent:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        occurredAt: { type: string, format: date-time }
+        actor: { type: string }
+        sourceIp: { type: string }
+        action: { type: string }
+        entityType: { type: string }
+        entityId: { type: string }
+        outcome: { type: string, enum: [SUCCESS, FAILURE, DENIED] }
+        detail: { type: object }
+        traceId: { type: string }
+        hash: { type: string }
+    DriftEvent:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        zoneId: { type: integer, format: int64 }
+        targetCode: { type: string }
+        name: { type: string }
+        type: { $ref: '#/components/schemas/RrType' }
+        op: { type: string, enum: [CREATE, UPDATE, DELETE] }
+        portal: { type: [object, 'null'] }
+        f5: { type: [object, 'null'] }
+        status: { type: string, enum: [OPEN, ADOPTED, REVERTED, IGNORED] }
+        detectedAt: { type: string, format: date-time }
+    F5Target:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        code: { type: string }
+        site: { type: string, enum: [DC, DR, AZ] }
+        driver: { type: string, enum: [RFC2136, ICONTROL_REST, BIGIQ] }
+        maxConcurrency: { type: integer }
+        ratePerSec: { type: integer }
+        enabled: { type: boolean }
+        health: { type: string, enum: [UP, DEGRADED, DOWN] }
+        circuit: { type: string, enum: [CLOSED, OPEN, HALF_OPEN] }
+        queueDepth: { type: integer }
+    JobAccepted:
+      type: object
+      properties:
+        jobId: { type: string }
+        statusUrl: { type: string }

@@ -1,0 +1,27 @@
+{
+  "name": "dns-portal-static",
+  "private": true,
+  "version": "0.1.0-static",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build && node scripts/inline.mjs",
+    "preview": "vite preview",
+    "test": "node scripts/test.mjs"
+  },
+  "dependencies": {
+    "@fontsource/inter": "5.1.0",
+    "lucide-react": "0.460.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-router-dom": "6.28.0"
+  },
+  "devDependencies": {
+    "@types/react": "18.3.12",
+    "@types/react-dom": "18.3.1",
+    "@vitejs/plugin-react": "4.3.4",
+    "typescript": "5.6.3",
+    "vite": "5.4.11"
+  },
+  "description": "DNS Management Portal - static demo: all features, data in browser localStorage, no backend"
+}
