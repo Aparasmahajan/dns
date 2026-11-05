@@ -36,8 +36,9 @@ These run through the same rules as the Spring Boot backend, ported to TypeScrip
   (the same URL rules as the real `SecurityConfig`).
 - **Partitions (F5 naming rule):** maker-checker, direct Checker/Admin changes, DNS validation (one-to-one,
   one-to-many, PTR), versions v1.0 → v1.1 …
-- **Scheduling:** modify, delete and rollback can be scheduled; a new record cannot. Scheduled jobs run only
-  while the site role is Active, and a change goes stale if the record changed meanwhile.
+- **Scheduling:** only updates (modify) and Admin rollbacks can be scheduled; creating or deleting a record
+  runs straight away or on approval. Scheduled jobs run only while the site role is Active, and a change goes
+  stale if the record changed meanwhile.
 - **Admin:** version compare, rollback now or scheduled, held rollbacks, restoring deleted records.
 - **Mock F5:** per-site results. Domains ending `.fail.test` fail at DR.
 - **Audit trail:** every action, with user ID and name on user events, and search.

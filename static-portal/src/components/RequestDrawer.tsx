@@ -110,7 +110,7 @@ export default function RequestDrawer({ id, onClose, onChanged }: { id: number; 
           )}
           {cr.canEdit && (
             <button className="btn" onClick={() => setEditing(true)}>
-              <Pencil size={16} /> {usesRecordForm ? 'Edit request' : 'Edit time and reason'}
+              <Pencil size={16} /> {usesRecordForm ? 'Edit request' : cr.operation === 'ROLLBACK' ? 'Edit time and reason' : 'Edit reason'}
             </button>
           )}
           {cr.canConfirm && (

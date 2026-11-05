@@ -6,7 +6,8 @@ import type { ChangeRequest } from '../types';
 import ScheduleField, { scheduleError, scheduleFrom, scheduleIso, type ScheduleValue } from './ScheduleField';
 import { Modal } from './ui';
 
-/** Edit the time, reason and ITSM reference of a delete or rollback request (these have no record form). */
+/** Edit a delete request (reason, ITSM) or a rollback (also its time): these have no record form.
+ *  Only updates and rollbacks can be scheduled, so a delete has no time to edit. */
 export default function EditScheduleDialog({
   request,
   onClose,
@@ -23,10 +24,11 @@ export default function EditScheduleDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const scheduleProblem = scheduleError(schedule);
+  const canSchedule = request.operation === 'ROLLBACK';
+  const scheduleProblem = canSchedule ? scheduleError(schedule) : null;
   const reasonProblem = reason.trim() ? null : 'Give a reason for this change.';
   const backToApproval = !request.direct && request.status === 'SCHEDULED';
-  const runsNow = request.direct && schedule.mode === 'now';
+  const runsNow = canSchedule && request.direct && schedule.mode === 'now';
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -35,7 +37,7 @@ export default function EditScheduleDialog({
     setBusy(true);
     setError(null);
     try {
-      onDone(await api.put<ChangeRequest>(`/api/change-requests/${request.id}`, { reason, itsmRef, scheduledAt: scheduleIso(schedule) }));
+      onDone(await api.put<ChangeRequest>(`/api/change-requests/${request.id}`, { reason, itsmRef, scheduledAt: canSchedule ? scheduleIso(schedule) : null }));
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -70,6 +72,7 @@ export default function EditScheduleDialog({
             <span>This request is already approved. Saving a change sends it back to the Checkers for re-approval.</span>
           </div>
         )}
+        {canSchedule && (
         <ScheduleField
           value={schedule}
           onChange={setSchedule}
@@ -78,6 +81,7 @@ export default function EditScheduleDialog({
           nowDesc={request.direct ? 'Applied to F5 when you save' : 'Runs on F5 when a Checker approves it'}
           laterDesc="Runs at the date and time you choose"
         />
+        )}
         <div className="field">
           <label htmlFor="es-itsm">ITSM reference (optional)</label>
           <input id="es-itsm" className="input" value={itsmRef} onChange={(e) => setItsmRef(e.target.value)} />

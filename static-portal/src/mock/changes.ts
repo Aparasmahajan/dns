@@ -54,8 +54,9 @@ const SITES = ['DC', 'DR', 'AZ'];
 const MIN_LEAD_SECONDS = 60;
 const MAX_DAYS_AHEAD = 90;
 export const SCHEDULER_POLL_MS = 15_000;
-const NO_SCHEDULED_CREATE =
-  'A new record cannot be scheduled. It is created straight away (or as soon as a Checker approves it). Scheduling is for changes to existing records.';
+/** Only updates (MODIFY) and Admin rollbacks can be scheduled; create and delete run at once or on approval. */
+const ONLY_UPDATES_SCHEDULED =
+  'Only updates to an existing record (and Admin rollbacks) can be scheduled. Creating or deleting a record runs straight away, or as soon as a Checker approves it.';
 
 // ---------------------------------------------------------------- helpers
 
@@ -327,7 +328,7 @@ export function submit(ctx: Ctx) {
   const c = newCr(me, operation);
   c.reason = requireReason(b.reason);
   c.itsmRef = cleanItsm(b.itsmRef);
-  if (operation === 'CREATE' && b.scheduledAt) throw badRequest(NO_SCHEDULED_CREATE);
+  if ((operation === 'CREATE' || operation === 'DELETE') && b.scheduledAt) throw badRequest(ONLY_UPDATES_SCHEDULED);
   c.scheduledAt = checkSchedule(b.scheduledAt);
 
   if (operation === 'CREATE') {
@@ -392,7 +393,7 @@ export function update(ctx: Ctx, id: number) {
 
   c.reason = requireReason(b.reason);
   c.itsmRef = cleanItsm(b.itsmRef);
-  if (c.operation === 'CREATE' && b.scheduledAt) throw badRequest(NO_SCHEDULED_CREATE);
+  if ((c.operation === 'CREATE' || c.operation === 'DELETE') && b.scheduledAt) throw badRequest(ONLY_UPDATES_SCHEDULED);
   const scheduledAt = checkSchedule(b.scheduledAt);
   if (c.operation === 'CREATE') {
     const spec = validateSpec(b.spec as RecordSpecInput);

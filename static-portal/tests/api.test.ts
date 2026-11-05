@@ -157,7 +157,9 @@ async function main() {
 
   console.log('== Scheduling');
   r = await call('pravez', 'POST', '/api/change-requests', { operation: 'CREATE', groupId: g.Internet_Banking.id, spec: spec('SINGLE', 's.bank.example', ['10.1.2.3']), reason: 'x', scheduledAt: inMinutes(60) });
-  check('a new record cannot be scheduled', r.status === 400 && r.body.message.includes('cannot be scheduled'));
+  check('a new record cannot be scheduled', r.status === 400 && r.body.message.includes('Only updates'));
+  r = await call('anoop', 'POST', '/api/change-requests', { operation: 'DELETE', recordId: ledger, reason: 'x', scheduledAt: inMinutes(60) });
+  check('a delete cannot be scheduled', r.status === 400 && r.body.message.includes('Only updates'));
   r = await call('anoop', 'POST', '/api/change-requests', { operation: 'MODIFY', recordId: ledger, spec: spec('MULTI', 'ledger.bank.example', ['10.70.0.1', '10.70.0.3']), reason: 'night', scheduledAt: inMinutes(-5) });
   check('time in the past refused', r.status === 400);
   r = await call('anoop', 'POST', '/api/change-requests', { operation: 'MODIFY', recordId: ledger, spec: spec('MULTI', 'ledger.bank.example', ['10.70.0.1', '10.70.0.3']), reason: 'night', scheduledAt: inMinutes(60) });
