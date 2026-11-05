@@ -20,6 +20,7 @@ const defaultConfig: PublicConfig = {
   version: '',
   ldapEnabled: false,
   passwordMinLength: 12,
+  departments: [],
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);

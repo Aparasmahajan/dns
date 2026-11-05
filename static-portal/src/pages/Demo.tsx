@@ -7,7 +7,7 @@ import { levelLabel } from '../format';
 import type { AccessLevel, UserStatus } from '../types';
 
 interface DemoInfo {
-  settings: { siteRole: 'Active' | 'Standby'; ldapEnabled: boolean; f5FailSuffix: string };
+  settings: { siteRole: 'Active' | 'Standby'; ldapEnabled: boolean; f5FailSuffix: string; departments: string[] };
   directory: { uid: string; name: string; email: string | null; portalStatus: UserStatus | null; portalLevel: AccessLevel | null }[];
   storageBytes: number;
   counts: { users: number; partitions: number; records: number; changeRequests: number; auditEvents: number };
@@ -19,6 +19,7 @@ export default function DemoPage() {
   const [info, setInfo] = useState<DemoInfo | null>(null);
   const [form, setForm] = useState({ uid: '', name: '', email: '', password: '12345677' });
   const [suffix, setSuffix] = useState('');
+  const [departments, setDepartments] = useState('');
   const [confirmReset, setConfirmReset] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -28,6 +29,7 @@ export default function DemoPage() {
       .then((d) => {
         setInfo(d);
         setSuffix(d.settings.f5FailSuffix);
+        setDepartments(d.settings.departments.join('\n'));
       })
       .catch((e) => toast.error(errorMessage(e)));
 
@@ -61,6 +63,7 @@ export default function DemoPage() {
       const d = await api.put<DemoInfo>('/api/admin/demo/settings', { ...info!.settings, ...changes });
       setInfo(d);
       setSuffix(d.settings.f5FailSuffix);
+      setDepartments(d.settings.departments.join('\n'));
       toast.success('Demo settings saved.');
       notifyChanged();
     } catch (err) {
@@ -221,6 +224,20 @@ export default function DemoPage() {
                 </button>
               </div>
               <span className="hint">The change then fails at the DR site, so the per-site F5 error display can be shown. Empty: nothing fails.</span>
+            </div>
+            <div className="field" style={{ marginTop: 18, marginBottom: 0 }}>
+              <label htmlFor="d-depts">Departments in the dropdowns (one per line)</label>
+              <textarea id="d-depts" className="textarea" rows={6} value={departments} onChange={(e) => setDepartments(e.target.value)} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginTop: 6 }}>
+                <span className="hint">In the real portal this is DEPARTMENTS in .env. Empty list: free text.</span>
+                <button
+                  className="btn"
+                  onClick={() => saveSettings({ departments: departments.split('\n').map((d) => d.trim()).filter(Boolean) })}
+                  disabled={departments.split('\n').map((d) => d.trim()).filter(Boolean).join('\n') === s.departments.join('\n')}
+                >
+                  Save
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -130,7 +130,17 @@ function validEmail(email: unknown): string | null {
   return t;
 }
 
-const cleanDepartment = (d: unknown) => clean(d, 200);
+/** Department chosen from the list; the user's current value is kept even if the list changed since. */
+function checkDepartment(db: Db, value: unknown, current: string | null): string | null {
+  const v = clean(value, 1000);
+  if (!v) return null;
+  if (v.length > 200) throw badRequest('The department name is too long.');
+  const list = db.settings.departments ?? [];
+  if (!list.length || v === current) return v;
+  const match = list.find((d) => d.toLowerCase() === v.toLowerCase());
+  if (!match) throw badRequest('Choose a department from the list.');
+  return match;
+}
 
 function applyAccess(db: Db, u: UserRec, level: unknown, groupIds: unknown) {
   if (level !== 'READ' && level !== 'WRITE' && level !== 'CHECKER') throw badRequest('Choose an access level: Read only, Read + Write or Checker.');
@@ -176,7 +186,7 @@ export function createUser(ctx: Ctx) {
   const u = newUser(username, ctx.me!.username);
   u.displayName = clean(b.displayName, 200) ?? username;
   u.email = validEmail(b.email);
-  u.department = cleanDepartment(b.department);
+  u.department = checkDepartment(db, b.department, null);
   applyAccess(db, u, b.level, b.groupIds);
   const temporary = temporaryPassword();
   u.passwordHash = hashPassword(temporary);
@@ -201,7 +211,7 @@ export function updateUser(ctx: Ctx, id: number) {
     if (name) u.displayName = name;
     u.email = validEmail(b.email);
   }
-  if (b.department !== undefined && b.department !== null) u.department = cleanDepartment(b.department);
+  if (b.department !== undefined && b.department !== null) u.department = checkDepartment(db, b.department, u.department);
   applyAccess(db, u, b.level, b.groupIds);
   const answered = statusBefore === 'PENDING' ? closeOpenRequest(ctx, u, 'GRANTED', null) : null;
   audit(ctx, statusBefore === 'PENDING' ? 'USER_ACCESS_GRANTED' : 'USER_ACCESS_CHANGED', 'SUCCESS', 'USER', u.username, {
@@ -293,7 +303,7 @@ export function grantFromDirectory(ctx: Ctx) {
   u.source = 'LDAP';
   u.displayName = entry.name || username;
   u.email = entry.email;
-  u.department = cleanDepartment(b.department);
+  u.department = checkDepartment(db, b.department, null);
   applyAccess(db, u, b.level, b.groupIds);
   u.id = nextId(db, 'user');
   db.users.push(u);
@@ -329,8 +339,8 @@ export function submitAccessRequest(ctx: Ctx) {
   const b = ctx.body;
   const user = userById(db, me.id)!;
   if (user.status !== 'PENDING') throw conflict('You already have access. Ask the Admin if you need a change.');
-  const department = clean(b.department, 200);
-  if (!department || department.length < 2) throw badRequest('Enter your department.');
+  const department = checkDepartment(db, b.department, user.department);
+  if (!department || department.length < 2) throw badRequest('Choose your department.');
   const level = b.level;
   if (level !== 'READ' && level !== 'WRITE' && level !== 'CHECKER') throw badRequest('Choose the access you need: Read only, Read + Write or Checker.');
   let ids: number[] = [];
@@ -401,7 +411,7 @@ export function listAudit(ctx: Ctx) {
 export function demoInfo(ctx: Ctx) {
   const db = ctx.db;
   return {
-    settings: { siteRole: db.settings.siteRole, ldapEnabled: db.settings.ldapEnabled, f5FailSuffix: db.settings.f5FailSuffix },
+    settings: { siteRole: db.settings.siteRole, ldapEnabled: db.settings.ldapEnabled, f5FailSuffix: db.settings.f5FailSuffix, departments: db.settings.departments },
     directory: [...db.directory]
       .sort((a, b) => a.uid.localeCompare(b.uid))
       .map((d) => {
@@ -446,10 +456,18 @@ export function updateDemoSettings(ctx: Ctx) {
   if (b.siteRole === 'Active' || b.siteRole === 'Standby') db.settings.siteRole = b.siteRole;
   if (typeof b.ldapEnabled === 'boolean') db.settings.ldapEnabled = b.ldapEnabled;
   if (typeof b.f5FailSuffix === 'string') db.settings.f5FailSuffix = b.f5FailSuffix.trim().slice(0, 60);
+  if (Array.isArray(b.departments)) {
+    const seen = new Set<string>();
+    db.settings.departments = b.departments
+      .map((d) => String(d).trim().slice(0, 200))
+      .filter((d) => d && !seen.has(d.toLowerCase()) && seen.add(d.toLowerCase()))
+      .slice(0, 200);
+  }
   audit(ctx, 'DEMO_SETTINGS_CHANGED', 'SUCCESS', 'SYSTEM', null, m({
     siteRole: before.siteRole !== db.settings.siteRole ? db.settings.siteRole : null,
     ldapEnabled: before.ldapEnabled !== db.settings.ldapEnabled ? db.settings.ldapEnabled : null,
     f5FailSuffix: before.f5FailSuffix !== db.settings.f5FailSuffix ? db.settings.f5FailSuffix : null,
+    departments: JSON.stringify(before.departments) !== JSON.stringify(db.settings.departments) ? db.settings.departments : null,
   }));
   return demoInfo(ctx);
 }

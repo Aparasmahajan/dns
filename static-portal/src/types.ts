@@ -19,6 +19,8 @@ export interface PublicConfig {
   version: string;
   ldapEnabled: boolean;
   passwordMinLength: number;
+  /** Departments to choose from (empty: free text). */
+  departments: string[];
 }
 
 export interface Me {

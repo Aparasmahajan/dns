@@ -141,7 +141,11 @@ export interface Settings {
   f5FailSuffix: string;
   adminUsername: string;
   adminPasswordHash: string;
+  /** Departments users choose from (empty: free text). */
+  departments: string[];
 }
+
+export const DEFAULT_DEPARTMENTS = ['Core Banking', 'Digital Banking', 'Information Security', 'IT Infrastructure', 'Network Operations', 'Payments'];
 
 export interface Db {
   version: 1;
@@ -173,7 +177,10 @@ export function loadDb(): Db {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const db = JSON.parse(raw) as Db;
-      if (db && db.version === 1 && Array.isArray(db.users)) return db;
+      if (db && db.version === 1 && Array.isArray(db.users)) {
+        if (!Array.isArray(db.settings.departments)) db.settings.departments = [...DEFAULT_DEPARTMENTS]; // data saved before departments existed
+        return db;
+      }
     }
   } catch {
     /* corrupt or blocked storage: start again */
@@ -258,6 +265,7 @@ export function seedDb(): Db {
       f5FailSuffix: '.fail.test',
       adminUsername: 'admin',
       adminPasswordHash: hashPassword(ADMIN_PASSWORD),
+      departments: [...DEFAULT_DEPARTMENTS],
     },
     users: [],
     groups: [],

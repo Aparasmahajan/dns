@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { AlertTriangle, BookUser, CheckCircle2, ClipboardList, Copy, Info, KeyRound, Lock, Pencil, Search, ShieldCheck, UserCheck, UserPlus, UserX, Users as UsersIcon, XCircle } from 'lucide-react';
 import { api, errorMessage, notifyChanged } from '../api';
 import { useToast } from '../components/Toast';
+import { useAuth } from '../auth';
+import DepartmentSelect from '../components/DepartmentSelect';
 import PartitionPicker from '../components/PartitionPicker';
 import { Empty, Loading, Modal, UserStatusBadge } from '../components/ui';
 import { fmtDateTime, initials, levelLabel, timeAgo } from '../format';
@@ -148,6 +150,7 @@ function UserModal({
   onSaved: (result: UserRow | UserWithPassword) => void;
   onDeclined?: () => void;
 }) {
+  const { config } = useAuth();
   const fromDirectory = !!directory;
   const creating = user === null && !fromDirectory;
   const pending = user?.status === 'PENDING';
@@ -343,13 +346,7 @@ function UserModal({
         {departmentEditable && (
           <div className="field">
             <label htmlFor="u-dept">Department</label>
-            <input
-              id="u-dept"
-              className="input"
-              value={department}
-              onChange={(e) => setDepartment(e.target.value)}
-              placeholder={openRequest ? '' : 'e.g. Network Operations'}
-            />
+            <DepartmentSelect id="u-dept" value={department} onChange={setDepartment} departments={config.departments} />
             {(user?.source === 'LDAP' || fromDirectory) && <span className="hint">Kept by the portal: the Bank directory does not provide it.</span>}
           </div>
         )}

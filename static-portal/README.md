@@ -52,6 +52,7 @@ It replaces what the real portal does with scripts and `.env`:
 - **Site role Active / Standby:** shows that a standby (DR) site does not run scheduled jobs.
 - **Directory sign-in:** turn it on or off.
 - **Mock F5 failure suffix:** which domains the mock F5 rejects.
+- **Departments:** the list shown in the department dropdowns (`DEPARTMENTS` in the real portal).
 - **Export, import or reset:** export to a JSON file, import it in another browser, or reset to the sample data.
   *Reset demo data* is also on the sign-in page.
 

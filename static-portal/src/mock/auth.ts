@@ -24,6 +24,7 @@ export function publicConfig(ctx: Ctx) {
     version: '0.1.0-static',
     ldapEnabled: ctx.db.settings.ldapEnabled,
     passwordMinLength: PASSWORD_MIN_LENGTH,
+    departments: ctx.db.settings.departments,
   };
 }
 

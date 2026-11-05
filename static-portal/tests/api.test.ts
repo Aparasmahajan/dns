@@ -103,6 +103,10 @@ async function main() {
   check('request form offers partitions', r.body.request === null && r.body.partitions.length === 3);
   r = await call('paras', 'POST', '/api/access-requests', { department: '', level: 'READ', reason: 'x' });
   check('department required', r.status === 400);
+  r = await call(null, 'GET', '/api/public/config');
+  check('department list offered', r.body.departments.includes('IT Infrastructure'));
+  r = await call('paras', 'POST', '/api/access-requests', { department: 'Somewhere Else', level: 'READ', reason: 'x' });
+  check('department must come from the list', r.status === 400 && r.body.message.includes('from the list'));
   r = await call('paras', 'POST', '/api/access-requests', { department: 'IT Infrastructure', level: 'WRITE', groupIds: [g.Internet_Banking.id], reason: 'Internet banking DNS' });
   check('access request raised', r.status === 200 && r.body.status === 'OPEN');
   const parasId = data().users.find((u: any) => u.username === '140126').id;

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { AlertTriangle, CheckCircle2, Hourglass, LogOut, Pencil, RefreshCw, Send, XCircle } from 'lucide-react';
 import { api, errorMessage } from '../api';
 import { useAuth, useMe } from '../auth';
+import DepartmentSelect from '../components/DepartmentSelect';
 import PartitionPicker from '../components/PartitionPicker';
 import { Brand, Loading } from '../components/ui';
 import { fmtDateTime, levelLabel } from '../format';
@@ -71,7 +72,7 @@ export default function PendingAccess() {
   }
 
   const errors: Record<string, string> = {};
-  if (form.department.trim().length < 2) errors.department = 'Enter your department.';
+  if (form.department.trim().length < 2) errors.department = 'Choose your department.';
   if (!form.level) errors.level = 'Choose the access you need.';
   if (form.level === 'WRITE' && form.groupIds.length === 0) errors.groups = 'Choose at least one partition.';
   if (!form.reason.trim()) errors.reason = 'Say why you need this access.';
@@ -201,12 +202,12 @@ export default function PendingAccess() {
               )}
               <div className="field">
                 <label htmlFor="ar-dept">Department</label>
-                <input
+                <DepartmentSelect
                   id="ar-dept"
-                  className={`input${show('department') ? ' invalid' : ''}`}
                   value={form.department}
-                  onChange={(e) => setForm({ ...form, department: e.target.value })}
-                  placeholder="e.g. Network Operations"
+                  onChange={(department) => setForm({ ...form, department })}
+                  departments={config.departments}
+                  invalid={!!show('department')}
                   autoFocus
                 />
                 {show('department') && <span className="error-text">{show('department')}</span>}
