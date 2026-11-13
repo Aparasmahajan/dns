@@ -80,6 +80,11 @@ function checkAccess(method: Method, path: string, ctx: Ctx) {
   if (path.startsWith('/api/auth/')) return;
   const role = roleOf(ctx.me);
   const denied = () => forbidden('You do not have permission for this action.');
+  // The Auditor may read the audit trail and the user list (with access requests), never change them
+  if (method === 'GET' && (path === '/api/admin/audit' || path === '/api/admin/users')) {
+    if (role !== 'ADMIN' && role !== 'AUDITOR') throw denied();
+    return;
+  }
   if (path.startsWith('/api/admin/')) {
     if (role !== 'ADMIN') throw denied();
     return;
@@ -88,7 +93,7 @@ function checkAccess(method: Method, path: string, ctx: Ctx) {
     if (role !== 'PENDING') throw denied();
     return;
   }
-  if (!['READ', 'WRITE', 'CHECKER', 'ADMIN'].includes(role)) throw denied();
+  if (!['READ', 'WRITE', 'CHECKER', 'ADMIN', 'AUDITOR'].includes(role)) throw denied();
 }
 
 /** Runs due scheduled jobs and saves; returns how many ran. Also called every 15 s while the portal is open. */

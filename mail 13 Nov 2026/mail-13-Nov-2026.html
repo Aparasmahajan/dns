@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DNS Portal status mail</title>
+<style>
+  body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; color: #222; background: #fff; max-width: 900px; margin: 16px auto; padding: 0 16px; line-height: 1.4; }
+  h3 { font-size: 12pt; margin: 18px 0 6px; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 10pt; }
+  th, td { border: 1px solid #999; padding: 4px 6px; text-align: left; vertical-align: top; }
+  th { background: #D9E2F3; }
+  td.n { white-space: nowrap; }
+  tr.red td { background: #FDE2E2; color: #C00000; font-weight: bold; }
+  .red { color: #C00000; font-weight: bold; }
+  ul { margin: 4px 0 8px; }
+</style>
+</head>
+<body>
+
+<p>Below is the current status of the DNS Management Portal, our plan for the coming weeks, and the inputs we need from Starlight and SBI to move to testing and a working prototype.</p>
+
+<h3>1. Current status</h3>
+<p>Development of the portal front end (React) and back end (Java / Spring Boot) is in progress. The local build already covers:</p>
+<ul>
+  <li>Sign-in with portal accounts and the Bank LDAP directory, access requests from new users, and the access levels Read, Read + Write, Checker, Admin and Auditor</li>
+  <li>Partitions and DNS records (one-to-one, one-to-many and PTR), with maker-checker approval and direct Checker/Admin changes</li>
+  <li>Scheduled changes, version history, version compare and rollback</li>
+  <li>An append-only audit trail and JSON log files ready to be forwarded to the SIEM</li>
+</ul>
+<p>The F5 integration is built behind a single interface and currently runs against a simulated F5. We will connect it to a real device once the F5 API is confirmed and test access is available.</p>
+
+<h3>2. Plan for this week</h3>
+<ul>
+  <li>Continue front-end and back-end development</li>
+  <li>Start unit and integration tests for the back-end API and the access rules</li>
+  <li>Prepare the F5 integration design: how a change is applied at DC, DR and AZ, and how a failure at one site is handled</li>
+</ul>
+
+<h3>3. Development timeline (tentative)</h3>
+<p>Working days only; 25-Dec is treated as a holiday.</p>
+<table>
+  <tr><th>#</th><th>Phase</th><th>Work</th><th>Duration</th><th>Tentative dates</th></tr>
+  <tr><td>1</td><td>Database design</td><td>Schema updates for IPv6 / AAAA records, F5 object mapping and per-site execution status</td><td class="n">1 day</td><td class="n">16-Nov-2026</td></tr>
+  <tr><td>2</td><td>Back end</td><td>IPv6 / AAAA records and validation</td><td class="n">2 days</td><td class="n">17 – 18 Nov</td></tr>
+  <tr><td>3</td><td>Back end</td><td>Change execution per site (DC, DR, AZ): status tracking, retries without double apply, handling a failure at one site</td><td class="n">4 days</td><td class="n">19 – 24 Nov</td></tr>
+  <tr><td>4</td><td>Front end</td><td>AAAA record forms, per-site execution status screens, review of all screens</td><td class="n">3 days</td><td class="n">25 – 27 Nov</td></tr>
+  <tr><td>5</td><td>Testing</td><td>Unit tests for the back-end API, access rules and front end</td><td class="n">3 days</td><td class="n">30 Nov – 2 Dec</td></tr>
+  <tr class="red"><td>6</td><td>F5 API setup (F5 / SBI)</td><td>Test F5 BIG-IP DNS (GTM) with API access, least-privilege API account, network access from the test server, and the F5 API documentation. Required for F5 integration and integration testing.</td><td class="n">Needed by</td><td class="n">2-Dec-2026</td></tr>
+  <tr class="red"><td>7</td><td>F5 integration</td><td>Verify the F5 API on the test GTM with our read-only check script</td><td class="n">1 day</td><td class="n">3-Dec</td></tr>
+  <tr class="red"><td>8</td><td>F5 integration</td><td>F5 API integration: sign-in token, create / modify / delete records at each site, F5 error handling</td><td class="n">5 days</td><td class="n">4 – 10 Dec</td></tr>
+  <tr class="red"><td>9</td><td>F5 integration</td><td>Read partitions and records from F5; check for changes made directly on F5 before a rollback</td><td class="n">3 days</td><td class="n">11 – 15 Dec</td></tr>
+  <tr class="red"><td>10</td><td>Integration testing</td><td>End-to-end integration testing (SIT) against the test F5 GTM</td><td class="n">4 days</td><td class="n">16 – 21 Dec</td></tr>
+  <tr><td>11</td><td>Deployment</td><td>Install on the SBI test server (RHEL 9): application, database, LDAPS and test SIEM connection</td><td class="n">2 days</td><td class="n">22 – 23 Dec</td></tr>
+  <tr><td>12</td><td>Stabilisation</td><td>SIT fixes, SIT report and documentation</td><td class="n">3 days</td><td class="n">24, 28 – 29 Dec</td></tr>
+  <tr><td>13</td><td>Prototype</td><td>Working prototype ready for the SBI demo</td><td class="n">–</td><td class="n">31-Dec-2026</td></tr>
+</table>
+<p class="red">The F5 API setup (row 6) is required before F5 integration and integration testing can start. If the test F5 GTM, API account or API documentation arrive after 2-Dec-2026, rows 7 to 13 move by the same delay.</p>
+<p>Deployment (row 11) can start earlier if the SBI test server is available earlier.</p>
+
+<h3>4. Next steps</h3>
+<ul>
+  <li>Unit and integration testing (SIT), with results shared before UAT</li>
+  <li>Deploy the portal on a test server</li>
+  <li>Test the integration against a test F5 BIG-IP DNS (GTM) to confirm the API</li>
+  <li>Production deployment as per the server configuration in the Solution Proposal (section 6.4)</li>
+</ul>
+
+<h3>5. What we need</h3>
+<p><b>From F5:</b></p>
+<ul>
+  <li>The BIG-IP DNS REST API documentation we requested earlier, and confirmation of whether the portal should call BIG-IP directly (iControl REST) or go through BIG-IQ. The F5 API links we are working from are listed in section 7 below. Please let us know if any change in the API approach is required.</li>
+  <li>How standard DNS records (A, AAAA, PTR) should be created and changed. F5 article K14724629 states that iControl REST does not support managing ZoneRunner (BIND). Please confirm F5's supported method for SBI's records, for example:
+    <ul>
+      <li>Wide IPs through the GTM API</li>
+      <li>DNS Express with zone transfers</li>
+      <li>DNS dynamic update with TSIG</li>
+    </ul>
+  </li>
+  <li><span class="red">A test F5 BIG-IP DNS (GTM), for example a BIG-IP VE, on the same software version as production, with a least-privilege API account and network access from our test server. This is required for F5 integration and integration testing (needed by 2-Dec-2026).</span> We have a read-only check script ready to verify the API as soon as access is available.</li>
+</ul>
+<p><b>From SBI:</b></p>
+<ul>
+  <li>A test server for deploying the portal on RHEL 9 (sizing below). It needs network access to the test F5 management interface, the Bank LDAP directory over LDAPS, and a test SIEM endpoint.</li>
+  <li>SBI's requirements for the working prototype:
+    <ul>
+      <li>the scope and use cases to demonstrate</li>
+      <li>test users for each access level</li>
+      <li>sample DNS data</li>
+      <li>the site (DC or DR) and the date</li>
+      <li>the acceptance criteria</li>
+    </ul>
+  </li>
+</ul>
+<p>Test environment sizing (Solution Proposal v2.1 section 6.4; Requirements Specification v1.0 section 14.1):</p>
+<ul>
+  <li>Portal App/API: 1–2 nodes, 8–16 vCPU, 16 GB RAM, 120–180 GB storage</li>
+  <li>PostgreSQL: 1–2 nodes, 8–16 vCPU, 16–32 GB RAM, 300–500 GB storage</li>
+  <li>Log forwarder: 1 node, 2–4 vCPU, 4–8 GB RAM, 50–100 GB storage</li>
+  <li>Utility / bastion: 0–1 node, 4–8 vCPU, 8–16 GB RAM, 60–80 GB storage (the Bank bastion can be reused where available)</li>
+</ul>
+<p>The second application and database nodes are needed only if SBI wants a high-availability / failover rehearsal in UAT.</p>
+
+<h3>6. Attachments</h3>
+<ul>
+  <li>DNS Management Portal: Requirements Specification v1.0 (13-Nov-2026). Section 14 covers the UAT requirements and section 16 lists the open points for SBI and F5.</li>
+  <li>DNS Management Portal: Solution Proposal v2.1 (13-Nov-2026), with the server configuration in section 6.4.</li>
+  <li>DNS Management Portal: Development Timeline v1.0 (13-Nov-2026), with the week view, dependencies and milestones.</li>
+  <li>Software Bill of Materials (SBOM) in the Bank's format (13-Nov-2026), with the versions of the current development build, the 76 back-end libraries (Annex A) and the 10 front-end packages (Annex B).</li>
+</ul>
+<p>Please review both documents and let us know if any changes are required, or confirm that we can proceed with them as they are.</p>
+
+<h3>7. F5 API references we are working from</h3>
+<p>F5 documentation:</p>
+<ul>
+  <li>iControl REST API: <a href="https://clouddocs.f5.com/api/icontrol-rest/">https://clouddocs.f5.com/api/icontrol-rest/</a></li>
+  <li>iControl REST API reference, BIG-IP DNS (GTM): <a href="https://clouddocs.f5.com/api/icontrol-rest/APIRef_tm_gtm.html">https://clouddocs.f5.com/api/icontrol-rest/APIRef_tm_gtm.html</a></li>
+  <li>AS3 GSLB declarations: <a href="https://clouddocs.f5.com/products/extensions/f5-appsvcs-extension/latest/declarations/gslb.html">https://clouddocs.f5.com/products/extensions/f5-appsvcs-extension/latest/declarations/gslb.html</a></li>
+  <li>BIG-IQ management API: <a href="https://clouddocs.f5.com/products/big-iq/mgmt-api/v0.0/">https://clouddocs.f5.com/products/big-iq/mgmt-api/v0.0/</a></li>
+  <li>VELOS (F5OS) API: <a href="https://clouddocs.f5.com/api/velos-api/velos-api-index.html">https://clouddocs.f5.com/api/velos-api/velos-api-index.html</a></li>
+</ul>
+<p>F5 knowledge articles:</p>
+<ul>
+  <li>K16153652: iControl REST API components by product. <a href="https://my.f5.com/manage/s/article/K16153652">https://my.f5.com/manage/s/article/K16153652</a></li>
+  <li>K45508216: Displaying the iControl REST table of contents. <a href="https://my.f5.com/manage/s/article/K45508216">https://my.f5.com/manage/s/article/K45508216</a></li>
+  <li>K14724629: iControl REST API for ZoneRunner (BIND) is not supported. <a href="https://my.f5.com/manage/s/article/K14724629">https://my.f5.com/manage/s/article/K14724629</a></li>
+  <li>K000152849: Accessing F5 VELOS system interface state via the F5OS-C API. <a href="https://my.f5.com/manage/s/article/K000152849">https://my.f5.com/manage/s/article/K000152849</a></li>
+  <li>K000092968: Determine the right parameters from the Management CLI when constructing REST API calls (F5OS). <a href="https://my.f5.com/manage/s/article/K000092968">https://my.f5.com/manage/s/article/K000092968</a></li>
+</ul>
+
+<p>Please let us know if you need anything else from our side.</p>
+
+</body>
+</html>

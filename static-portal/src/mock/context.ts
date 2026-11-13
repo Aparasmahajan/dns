@@ -31,7 +31,10 @@ export const principalOf = (u: UserRec): Principal => ({
 export const isAdmin = (p: Principal) => p.level === 'ADMIN';
 export const isChecker = (p: Principal) => p.level === 'CHECKER' || p.level === 'ADMIN';
 export const canWrite = (p: Principal) => p.level === 'WRITE' || isChecker(p);
-export const seesAllGroups = (p: Principal) => p.level === 'READ' || isChecker(p);
+export const isAuditor = (p: Principal) => p.level === 'AUDITOR';
+/** Read-only view of the audit trail, users and access requests: the Admin and the Auditor. */
+export const canViewAdministration = (p: Principal) => isAdmin(p) || isAuditor(p);
+export const seesAllGroups = (p: Principal) => p.level === 'READ' || p.level === 'AUDITOR' || isChecker(p);
 export const canSeeGroup = (p: Principal, groupId: number) => seesAllGroups(p) || p.groupIds.includes(groupId);
 export const canWriteGroup = (p: Principal, groupId: number) => isChecker(p) || (p.level === 'WRITE' && p.groupIds.includes(groupId));
 
@@ -134,7 +137,7 @@ function userGroups(db: Db, u: UserRec) {
     : [];
 }
 
-const allGroups = (level: AccessLevel) => level === 'READ' || level === 'CHECKER' || level === 'ADMIN';
+const allGroups = (level: AccessLevel) => level === 'READ' || level === 'CHECKER' || level === 'ADMIN' || level === 'AUDITOR';
 
 export function meDto(db: Db, u: UserRec) {
   return {
@@ -261,6 +264,7 @@ export function recordDto(db: Db, r: RecordRec, pending: CrRec | undefined, sche
       : null,
     canChange: r.status === 'ACTIVE' && !pending && canWriteGroup(me, r.groupId),
     canRollback: isAdmin(me),
+    canCompare: canViewAdministration(me),
   };
 }
 

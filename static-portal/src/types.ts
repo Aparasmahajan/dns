@@ -1,4 +1,4 @@
-export type AccessLevel = 'NONE' | 'READ' | 'WRITE' | 'CHECKER' | 'ADMIN';
+export type AccessLevel = 'NONE' | 'READ' | 'WRITE' | 'CHECKER' | 'ADMIN' | 'AUDITOR';
 export type UserStatus = 'PENDING' | 'ACTIVE' | 'DISABLED';
 export type UserSource = 'CONFIG' | 'LOCAL' | 'LDAP';
 export type MappingType = 'SINGLE' | 'MULTI' | 'PTR';
@@ -86,6 +86,8 @@ export interface DnsRecord {
   scheduled: ScheduledRef | null;
   canChange: boolean;
   canRollback: boolean;
+  /** Admin and Auditor: compare two versions (view only). */
+  canCompare: boolean;
 }
 
 export interface Snapshot {

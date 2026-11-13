@@ -2,7 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './auth';
 import Layout from './components/Layout';
 import { Loading } from './components/ui';
-import { isAdmin } from './format';
+import { canViewAdministration, isAdmin } from './format';
 import AuditPage from './pages/Audit';
 import Dashboard from './pages/Dashboard';
 import DemoPage from './pages/Demo';
@@ -29,8 +29,8 @@ export default function App() {
         <Route path="/records" element={<RecordsPage />} />
         <Route path="/requests" element={<RequestsPage />} />
         <Route path="/groups" element={<GroupsPage />} />
-        {isAdmin(me) && <Route path="/users" element={<UsersPage />} />}
-        {isAdmin(me) && <Route path="/audit" element={<AuditPage />} />}
+        {canViewAdministration(me) && <Route path="/users" element={<UsersPage />} />}
+        {canViewAdministration(me) && <Route path="/audit" element={<AuditPage />} />}
         {isAdmin(me) && <Route path="/demo" element={<DemoPage />} />}
         <Route path="/account/password" element={<AccountPasswordPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />

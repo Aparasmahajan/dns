@@ -12,6 +12,7 @@ const LEVELS: { level: AccessLevel; title: string; desc: string }[] = [
   { level: 'READ', title: 'Read only', desc: 'View and search DNS records and requests in all partitions.' },
   { level: 'WRITE', title: 'Read + Write', desc: 'Raise DNS changes in the partitions you pick below. A Checker approves each change.' },
   { level: 'CHECKER', title: 'Checker', desc: 'All partitions. Approve other users’ changes; your own changes apply directly.' },
+  { level: 'AUDITOR', title: 'Auditor', desc: 'View only, all partitions: records, requests, users and the audit trail. Cannot change anything.' },
 ];
 
 interface FormState {

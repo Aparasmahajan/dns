@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { api } from '../api';
 import { useAuth, useMe } from '../auth';
-import { initials, isAdmin, isChecker, levelLabel } from '../format';
+import { canViewAdministration, initials, isAdmin, isChecker, levelLabel } from '../format';
 import type { Counters } from '../types';
 import { Brand } from './ui';
 
@@ -138,7 +138,7 @@ export default function Layout({ children }: { children: ReactNode }) {
             <FolderTree size={19} /> Partitions
           </NavLink>
 
-          {isAdmin(me) && (
+          {canViewAdministration(me) && (
             <>
               <div className="nav-section">Administration</div>
               <NavLink to="/users" className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
@@ -148,9 +148,11 @@ export default function Layout({ children }: { children: ReactNode }) {
               <NavLink to="/audit" className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
                 <History size={19} /> Audit Trail
               </NavLink>
-              <NavLink to="/demo" className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
-                <Database size={19} /> Demo data
-              </NavLink>
+              {isAdmin(me) && (
+                <NavLink to="/demo" className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
+                  <Database size={19} /> Demo data
+                </NavLink>
+              )}
             </>
           )}
 
