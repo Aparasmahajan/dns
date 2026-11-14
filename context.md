@@ -1,6 +1,6 @@
 # Project Context – SBI DNS Front-End Portal
 
-Last updated: 06-Nov-2026 (full refresh)
+Last updated: 14-Nov-2026 (full refresh 06-Nov; decisions to 09-Nov; 13-Nov mail pack, timeline and SBOM rebuild added)
 
 ## 1. What this project is
 
@@ -12,10 +12,11 @@ Last updated: 06-Nov-2026 (full refresh)
 - **LB team:** maintains the Bank's load balancers (portal VIPs, GSLB, health checks, TLS, WAF). Outgoing docs call them "LB team". On 27-Oct the user said Starlight maintains the LB.
 - **Network Integrator (NI):** the Bank's network partner; receives knowledge transfer along with the Bank.
 - The bid went to a reverse auction, and F5 has pushed hard on cost.
-- **Current phase (06-Nov-2026):**
-  - Requirements v1.0 is written.
-  - The first build increment of the portal runs locally in Docker, with **F5 mocked**.
-  - Next is the real F5 API integration, waiting for F5's API documentation and a UAT BIG-IP VE.
+- **Current phase (13/14-Nov-2026):**
+  - Requirements are at internal v1.2, issued externally on 13-Nov as **v1.0** (see §4).
+  - The first build increment of the portal runs locally in Docker, with **F5 mocked**. The Auditor level was added on 09-Nov.
+  - A status mail with the requirements, proposal, development timeline and SBOM was drafted on 13-Nov (`mail 13 Nov 2026/`).
+  - Next is the real F5 API integration. It waits for the F5 API documentation, the supported way to manage A/AAAA/PTR records, and a test F5 GTM (needed by 2-Dec per the timeline).
 
 ## 2. Key people (from email thread)
 
@@ -30,9 +31,9 @@ Last updated: 06-Nov-2026 (full refresh)
 
 The last email in the thread is dated 29-Jul-2026; there has been nothing newer since.
 
-## 3. Folder layout (as on disk, 06-Nov-2026)
+## 3. Folder layout (as on disk, 14-Nov-2026)
 
-The whole `F5/` folder is a **git repo** (4 commits, 05-Nov). `.gitignore` keeps out secrets (`.env`), `node_modules`, build output and Office lock files.
+The whole `F5/` folder is a **git repo** (4 commits, 05-Nov; everything added since 05-Nov is **not committed** yet, in this repo and in `portal/`). `.gitignore` keeps out secrets (`.env`), `node_modules`, build output and Office lock files.
 
 ```
 F5/
@@ -48,13 +49,21 @@ F5/
 │   ├── F5-DNS-Portal-Solution-Proposal-v2.0.docx  17-Aug-2026 (Azalio-branded original)
 │   ├── …-v2.1(.docx/.pdf, + changes-highlighted)  03-Nov-2026 (files regenerated 04-Nov 11:28)
 │   │       ("- Copy.docx" files = older 03-Nov drafts)
-│   ├── …-v2.2(.docx/.pdf, + changes-highlighted)  04-Nov-2026 ← AGREED BASELINE
-│   ├── F5-DNS-Portal-Requirements-v1.1(.docx/.pdf) 06-Nov-2026 ← CURRENT REQUIREMENTS: v1.0 + new §14 UAT
-│   │       requirements; Decision log → §15, Open points → §16 (new B11–B14). Build script: job tmp add_uat.py
-│   ├── F5-DNS-Portal-Requirements-v1.0(.docx/.pdf) 05-Nov-2026 (kept unchanged; may already be with SBI)
+│   ├── …-v2.2(.docx/.pdf, + changes-highlighted)  04-Nov-2026 ← AGREED BASELINE (internal number; still has Azalio)
+│   ├── F5-DNS-Portal-Requirements-v1.2(.docx/.pdf) 09-Nov-2026 ← CURRENT REQUIREMENTS (internal number): v1.1 +
+│   │       Auditor level and the 09-Nov decisions, open point B15
+│   ├── F5-DNS-Portal-Requirements-v1.1(.docx/.pdf) 06-Nov-2026: v1.0 + new §14 UAT requirements; Decision log → §15,
+│   │       Open points → §16 (new B11–B14)
+│   ├── F5-DNS-Portal-Requirements-v1.0(.docx/.pdf) 05-Nov-2026 (old internal v1.0; NOT the v1.0 issued on 13-Nov)
 │   └── F5-DNS-Portal-Requirements-v0.1 / v0.2     INTERNAL drafts that show build status: do NOT share
+├── mail 13 Nov 2026/         OUTGOING PACK of 13-Nov (Azalio-free, externally numbered, see §4):
+│   ├── F5-DNS-Portal-Solution-Proposal-v2.1(.docx/.pdf)   = internal v2.2, de-branded, dated 13-Nov-2026
+│   ├── F5-DNS-Portal-Requirements-v1.0(.docx/.pdf)        = internal v1.2, dated 13-Nov-2026
+│   ├── F5-DNS-Portal-Development-Timeline-v1.0(.docx/.pdf) 16-Nov → 31-Dec plan, F5-dependent steps in red
+│   ├── SBI_SBOM_DNS_Portal(.docx/.pdf)                    SBOM rebuilt with the real dev-build versions (21 pages)
+│   └── mail-13-Nov-2026.html                              status mail (copy into Outlook to keep the red highlights)
 ├── portal/                   The working portal (git submodule, Docker). Remote: github.com/paras-azalio/dns.git
-│                             ⚠ the GitHub account name contains "azalio"
+│                             ⚠ the GitHub account name contains "azalio". Code guide in portal/arch/ (16 docs, 10-Nov)
 ├── static-portal/            Browser-only copy of the portal (React + localStorage); dist/index.html runs offline
 ├── f5_api/                   F5 API prep (not committed yet)
 │   ├── F5-API-Checks.md                       curl checks with expected output (BIG-IP DNS 16.1)
@@ -65,7 +74,9 @@ F5/
 └── analysis/
     ├── 06-api-integration-handover.md   Handover for the F5 API integration: where things are, decisions,
     │                                    the code seam (DnsProvisioner), 7 design problems, first steps
-    ├── sbom/SBI_SBOM_DNS_Portal.docx     Bank-format SBOM, 06-Nov-2026 (not committed yet)
+    ├── 07-portal-security-review.md     Security review of portal/ (06-Nov): 22 findings SEC-01…22. INTERNAL only
+    ├── sbom/SBI_SBOM_DNS_Portal.docx     Requirements-stage DRAFT SBOM (versions "to be updated"). The real-version
+    │                                    SBOM is in `mail 13 Nov 2026/` (the 06-Nov real-version file was never saved here)
     └── starlight/F5/                     SNAPSHOT of the whole project folder taken 04-Nov 19:18. Holds:
         ├── analysis/01…05-*.md          document review, open questions + sources, UI screen inventory,
         │                                client questionnaire, 05-integration-flow-lld-gaps.md
@@ -75,12 +86,16 @@ F5/
         └── dns-portal/docs/             old engineering pack (Next.js/NestJS, SSO+MFA): NOT decisions
 ```
 
-The SBOM template is `Downloads\SBI_SBOM.docx`. The build scripts (`build_sbom_v22.py`, `build_lb.py`) are in the job tmp folder.
+The SBOM template is `Downloads\SBI_SBOM.docx`. The old build scripts (`build_sbom_v22.py`, `build_lb.py`) were in a job tmp folder and are gone.
 
 ## 4. Source of truth
 
 - **Proposal v2.2** (04-Nov-2026) is the agreed baseline for all updates since v2.0. Its points need no separate Bank confirmation (decision 05-Nov): one approval, direct Checker/Admin changes, versioning and rollback, and directory users checked at every sign-in.
-- **Requirements Specification v1.0** (05-Nov-2026) records all detailed requirements (IDs AUTH, ONB, PAR, DNS, CHG, SCH, VER, RPT, AUD, NFR) and the open points (section 15).
+- **Requirements Specification v1.2** (09-Nov-2026) records all detailed requirements (IDs AUTH, ONB, PAR, DNS, CHG, SCH, VER, RPT, AUD, NFR, UAT) and the open points (section 16).
+- **Internal vs external numbers (decision 13-Nov):** the documents are issued to Starlight / F5 / SBI as new versions:
+  - internal proposal **v2.2** = external **Solution Proposal v2.1** (13-Nov-2026);
+  - internal requirements **v1.2** = external **Requirements Specification v1.0** (13-Nov-2026).
+  - The older files in `docs/` with the same numbers (v2.1 of 03-Nov, v1.0 of 05-Nov) are different internal drafts. In anything sent out, cite the external numbers.
 - **Stack** = Java 21 + Spring Boot, React (TypeScript), PostgreSQL 16, NGINX, Fluent Bit, on RHEL 9. Don't change the stack anywhere without asking.
   - FastAPI (in `requiments.md`) and NestJS/Next.js (in the old pack) are **not** decisions.
 
@@ -208,7 +223,7 @@ The local dev versions below are **actual**, not just planned:
 | fluent-bit | `fluent/fluent-bit:3.1.9` (prints only for now) |
 
 **Built:**
-- Sign-in, onboarding and access requests, department dropdown, partitions, all 4 access levels.
+- Sign-in, onboarding and access requests, department dropdown, partitions, all 5 access levels (Auditor added 09-Nov, migration V4; not committed yet).
 - Maker-checker and direct changes.
 - A record (one-to-one / one-to-many) and PTR.
 - Scheduling (modify only), versions, compare and rollback, held rollbacks, restoring deleted records.
@@ -231,7 +246,10 @@ The local dev versions below are **actual**, not just planned:
 
 **Tests and other code**
 - Portal API tests are **not in the repo** yet; the handover says to add them.
-- `static-portal/` has the same rules ported to TypeScript in `src/mock/`. `npm test` runs 67 checks. It's tracked in the workspace repo.
+- `static-portal/` has the same rules ported to TypeScript in `src/mock/`. `npm test` runs 85 checks (all passing on 12-Nov, Auditor included). It's tracked in the workspace repo.
+- **Code guide:** `portal/arch/` (10-Nov) documents the code; `arch/12-decisions-and-gaps.md` lists the gaps G1–G11 against the requirements. `portal/README.md` is behind the code (no Auditor).
+- **Git (12-Nov):** on GitHub, PR #1 merged `addn` into `dev` only up to `f4f72d5`; the department-dropdown commit `f37c6ad` is not on `dev`, and `main` is still `b679329`.
+- **Security review** (`analysis/07-portal-security-review.md`, 06-Nov, internal): no SQL injection / XSS / CSRF / IDOR found; 22 findings. SEC-01/02/03 (no MFA, Admin in `.env`, direct changes) were kept by decision on 09-Nov; SEC-14 is partly fixed by the Auditor level; the rest are open.
 - **F5 integration design problems** (handover §5):
   - no F5 calls inside a DB transaction;
   - no double apply;
@@ -277,8 +295,12 @@ The local dev versions below are **actual**, not just planned:
 | 09-Nov | **F5 API credentials in `.env` for now**; where DB/LDAP/F5 credentials live in UAT/production is open (NFR-SEC-03, B15) |
 | 09-Nov | **IPv6/AAAA** stays a requirement; the build (IPv4 only today) adds it together with the F5 integration |
 | 09-Nov | Requirements **v1.2** issued (`docs/F5-DNS-Portal-Requirements-v1.2.docx/.pdf`): the decisions above; v1.1 kept unchanged |
+| 13-Nov | **Documents issued as new versions:** internal proposal v2.2 → external **Solution Proposal v2.1**, internal requirements v1.2 → external **Requirements v1.0**, both dated 13-Nov-2026 and cleaned of every Azalio trace. Kept in `mail 13 Nov 2026/`; the originals in `docs/` are unchanged |
+| 13-Nov | **Status mail** drafted: progress, weekly plan, next steps; asks Starlight for the F5 API documentation, the record-management method and one unit-testing environment (test F5 GTM) to test the F5 API; asks SBI (once development is done) for a RHEL 9 test server and the prototype requirements. Attachments: requirements v1.0, proposal v2.1, SBOM (and optionally the timeline). Asks the recipient to approve the documents or say what to change |
+| 13-Nov | **Development timeline v1.0** (tentative): DB design 16-Nov → back end → front end → unit tests (to 2-Dec) → **F5 API setup needed by 2-Dec** → F5 integration 3–15 Dec → SIT 16–21 Dec → test-server deployment 22–23 Dec → working prototype **31-Dec-2026**. A late F5 setup moves steps 7–13 by the same delay |
+| 13-Nov | **SBOM rebuilt** with the real dev-build versions (see §13) |
 
-## 12. Open points (Requirements v1.0 §15)
+## 12. Open points (Requirements v1.2 §16)
 
 **For the Bank (via F5)**
 - **B1:** MFA deviation.
@@ -291,9 +313,16 @@ The local dev versions below are **actual**, not just planned:
 - **B8:** RTO for one server vs the whole DC; TLS 1.3 deviation (the F5 management API is TLS 1.2 only; compliance J3.5 = N).
 - **B9:** reports; records per department vs per partition.
 - **B10:** branding (F5 logo for now).
+- **B11:** enterprise editions: which components move to a paid edition and who provides the licences; then re-issue the SBOM as final.
+- **B12:** UAT environment (site, VMs, network, URL, certificate, start date).
+- **B13:** UAT integrations and data (LDAP test users, test SIEM, Vault/KMS, sample DNS data, HA rehearsal, VAPT on UAT).
+- **B14:** UAT test cases, defect severity, acceptance criteria and sign-off.
+- **B15:** where the DB, LDAP and F5 credentials are kept in UAT and production (Vault/KMS or `.env`).
 
 **For F5**
 - **F1:** REST API documentation.
+  - ⚠ **13-Nov finding, F5 article K14724629:** iControl REST does **not** support managing ZoneRunner (BIND), on any BIG-IP DNS version. If SBI's A/AAAA/PTR records live in ZoneRunner zones, the portal can't change them through REST. F5 must confirm the supported method (Wide IPs through the GTM API, DNS Express + zone transfer, or DNS dynamic update with TSIG). Asked in the 13-Nov mail.
+  - The 5 my.f5.com K-articles in `f5_api/api_links.txt` do open (they load with JavaScript): K16153652 REST components by product, K45508216 REST table of contents, K14724629 ZoneRunner not supported, K000152849 VELOS interface state via F5OS-C API, K000092968 F5OS REST parameters from the CLI. `F5-API-Checks.md` Appendix C saying they couldn't be read is outdated.
 - **F2:** BIG-IQ CM or direct BIG-IP (iControl REST).
 - **F3:** how partitions apply to DNS objects.
 - **F4:** reading live configuration (drift and sync).
@@ -311,10 +340,13 @@ All 12 SBI queries and 12 F5 internal confirmations in the 29-Jul-2026 workbook 
 
 | Deliverable | Where | Status |
 |---|---|---|
-| SBOM (Bank format) | `analysis/sbom/SBI_SBOM_DNS_Portal.docx` | 06-Nov, **real versions from the dev build** (portal 0.1.0, images built 05-Nov), read from the running images and the JAR. 10 components, 15 pages: Portal 0.1.0, React 18.3.1, Spring Boot 3.4.1, Temurin 21.0.13+9, PostgreSQL 16.15, NGINX 1.27.5, Fluent Bit 3.1.9 (in the build) + Patroni, Vault/KMS, RHEL 9 (planned). Annex A = all 76 backend JAR libraries; Annex B = 10 front-end runtime packages with licences. Real checksums: JAR SHA-256 cc5b992a…, image IDs. Dev base OS: Ubuntu 26.04.1 (backend), Alpine 3.21 (frontend), Alpine 3.24 (db). **No vulnerability scan run yet.** ⚠ Flags: Spring Boot 3.4.x OSS support ended 31-Dec-2025; NGINX 1.27 branch no longer maintained; Fluent Bit 3.1 is an old line. Build script: job tmp `build_sbom_v3.py` + `jarlibs.json`. Pre-build version kept as `bak_v20/SBI_SBOM_DNS_Portal_06nov_prebuild.docx` |
+| SBOM (Bank format) | `mail 13 Nov 2026/SBI_SBOM_DNS_Portal.docx/.pdf` | **Rebuilt 13-Nov** (the 06-Nov real-version file was never saved; `analysis/sbom/` holds only the requirements-stage draft). 21 pages, 10 components with real dev-build versions: Portal 0.1.0, React 18.3.1, Spring Boot 3.4.1, Temurin 21.0.13+9, PostgreSQL 16.15, NGINX 1.27.5, Fluent Bit 3.1.9; Patroni, Vault/KMS, RHEL 9 planned. JAR SHA-256 `cc5b992a…b88`. Annex A = 76 back-end Java libraries with licences; Annex B = 10 front-end runtime packages. Release and EOL dates checked 13-Nov (Spring Boot 3.4 OSS support ended 31-Dec-2025, commercial ends 31-Dec-2026; NGINX 1.27 ended 24-Jun-2025; Fluent Bit 3.1 ended 12-Feb-2025; PostgreSQL 16.16 out 12-Nov-2026; Temurin 21 supported to 31-Dec-2029). Lists known CVEs (Spring Security CVE-2025-22228, Tomcat CVE-2025-24813, Logback CVE-2024-12798/12801, pgjdbc CVE-2025-49146, react-router-dom 6.28.0 advisories). **No full vulnerability scan yet; container image digests missing** (Docker didn't start) |
+| Development timeline | `mail 13 Nov 2026/F5-DNS-Portal-Development-Timeline-v1.0` | 13-Nov, tentative, 16-Nov → 31-Dec-2026 (see decision log) |
+| Status mail | `mail 13 Nov 2026/mail-13-Nov-2026.html` | 13-Nov draft; the user's final text is in chat, the HTML still has the timeline section |
+| Security review | `analysis/07-portal-security-review.md` | 06-Nov, internal only; don't push it to a public repo |
 | LB prerequisites + queries | snapshot `analysis/starlight/F5/analysis/starlight/` | ⚠ **Stale:** written for v2.1's 1 node per site and no local VIP. v2.2 needs a local VIP and 2 nodes per site again |
-| Requirements Specification | `docs/F5-DNS-Portal-Requirements-v1.0` | Current; v0.1/v0.2 are internal only |
-| Proposal | `docs/…-v2.2` | Baseline; see the document issues below |
+| Requirements Specification | `docs/…-v1.2` (internal) = `mail 13 Nov 2026/…-v1.0` (external) | Current; v0.1/v0.2 are internal only |
+| Proposal | `docs/…-v2.2` (internal) = `mail 13 Nov 2026/…-v2.1` (external, Azalio-free) | Baseline; see the document issues below |
 | F5 API request | `requiments.md` | Mailed (per 04-Nov notes); the local file still says FastAPI |
 | Client questionnaire, UI inventory, open questions | snapshot `analysis/starlight/F5/analysis/01–05` | From 27–29 Oct; partly superseded by Requirements v1.0 |
 
@@ -324,10 +356,7 @@ All 12 SBI queries and 12 F5 internal confirmations in the 29-Jul-2026 workbook 
 - The proposal says "TLS 1.3"; the compliance sheet says TLS 1.2 max for the F5 management API.
 - The compliance sheet is missing **J4.3** (RTO/RPO) and **J4.4** (72-hour patching).
 - The proposal recommends a quorum/witness but sizes none.
-- **v2.1/v2.2 still contain Azalio:**
-  - Visible: the Assumptions row "Failover control and fencing" and the RACI column header.
-  - Hidden: style names "Azalio Section" / "Azalio Subsection", and `docProps/core0.xml` with author "Azalio Technologies".
-  - The cover, author column, footer and logo were already de-branded.
+- **Internal v2.1/v2.2 in `docs/` still contain Azalio** (visible: the HA/DR "Azalio Portal HA/DR orchestration" sentence and the RACI column header; hidden: style names "Azalio Section/Subsection" and author "Azalio Technologies"). **Fixed in the external v2.1 of 13-Nov** (`mail 13 Nov 2026/`): "The portal HA/DR orchestration…", RACI header "Starlight Data Solutions", styles renamed "Portal Section/Subsection", author Starlight. Always send the external file.
 - v2.2 Figure 4 shows only the maker → approval path, not the direct Checker/Admin path. The figures still say Requester/Approver/Admin.
 - Requirements v1.0 says "Read + Write"; v2.2 says "Write (maker)". They mean the same.
 
@@ -337,14 +366,20 @@ Planning W1–W4 · Design W3–W7 (sign-off end W6) · Build/Integration W6–W
 
 ## 16. Next steps
 
+- [ ] Send the 13-Nov status mail with the external Requirements v1.0, Proposal v2.1 and SBOM (and the timeline if wanted); follow up for approval of the documents.
+- [ ] Get from F5 (via Starlight): the API docs, the supported method for A/AAAA/PTR records (ZoneRunner is not REST-managed), and a test F5 GTM with a least-privilege API account by **2-Dec** (timeline dependency).
 - [ ] Fix "FastAPI" → Java/Spring Boot in `requiments.md`; chase F5 for the API docs and UAT BIG-IP VE.
-- [ ] Commit `f5_api/` and `analysis/sbom/` in the workspace repo.
+- [ ] Commit the uncommitted work: `portal/` (Auditor, V4, `arch/`) and the workspace (`context.md`, `static-portal/`, docs v1.1/v1.2, `f5_api/`, `analysis/sbom/`, `mail 13 Nov 2026/`, portal pointer). Keep `analysis/07-portal-security-review.md` out until the GitHub repo is known to be private.
+- [ ] Update `portal/README.md` for the Auditor level and migrations V3–V4.
+- [ ] SBOM: add container image digests and a full vulnerability scan (Trivy / OWASP Dependency-Check) once Docker is running; note that HashiCorp Vault is **not open source** (Business Source License since Aug-2023; OpenBao is the MPL-2.0 open-source fork) if a dedicated Vault is chosen (B15).
 - [ ] F5 integration (handover §5–7): execution state machine, per-site idempotency, and `F5Provisioner` behind `F5_MODE`.
 - [ ] Build IPv6 / AAAA (DNS-02) before the F5 mapping; add portal API tests to the repo.
 - [ ] Update the LB prerequisites and queries for v2.2 (local VIP + 2 nodes per site), then mail the LB team.
-- [x] SBOM filled with the real dev-build versions (06-Nov).
+- [x] SBOM filled with the real dev-build versions (06-Nov; file lost, rebuilt 13-Nov in `mail 13 Nov 2026/`).
+- [x] Proposal and requirements de-branded and issued as external v2.1 / v1.0 (13-Nov).
+- [x] Development timeline v1.0 written (13-Nov).
 - [ ] Before UAT: upgrade Spring Boot to a supported line and NGINX to a maintained branch; review Fluent Bit; pin `postgres:16-alpine` to an exact version; run a vulnerability scan (Trivy / OWASP Dependency-Check) and add the results to the SBOM.
-- [ ] Clean all Azalio traces (proposal body, hidden styles and properties, GitHub account name in the `portal` remote) before anything goes to the Bank.
+- [ ] Clean the remaining Azalio traces: the GitHub account name in the `portal` remote (the documents are clean in the external pack).
 - [ ] Send the Bank open points B1–B14 (via F5) and the F5 points F1–F5. B11–B14 are new in v1.1: enterprise editions and licences, UAT environment, UAT integrations/data, UAT acceptance.
 - [ ] ⚠ **Before SBI freezes the SBOM:** the SBOM SBI calls "final" was the dev-build draft, with Spring Boot 3.4.1 (OSS support ended) and NGINX 1.27.5 (unmaintained branch), no vulnerability scan, and Patroni/Vault/RHEL minor not fixed. Agree the final versions and editions (B11), then re-issue the SBOM as final.
 - [ ] Remove the `5433` DB port and `SAMPLE_DATA` for UAT/production; set `COOKIE_SECURE=true`; secrets go in Vault/KMS.
