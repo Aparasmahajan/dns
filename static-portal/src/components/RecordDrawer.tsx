@@ -46,6 +46,7 @@ export default function RecordDrawer({
 
   const r = detail?.record;
   const admin = !!r?.canRollback;
+  const canCompare = !!r?.canCompare;
   const deleted = r?.status === 'DELETED';
 
   const comparison = useMemo(() => {
@@ -171,9 +172,15 @@ export default function RecordDrawer({
             </dl>
 
             <div className="section-title">Version history</div>
-            {admin && (
+            {canCompare && (
               <p className="hint" style={{ margin: '-4px 0 10px' }}>
-                Tick two versions to compare them. Use <RotateCcw size={12} style={{ verticalAlign: '-1px' }} /> to roll the record back to a version.
+                Tick two versions to compare them.
+                {admin && (
+                  <>
+                    {' '}
+                    Use <RotateCcw size={12} style={{ verticalAlign: '-1px' }} /> to roll the record back to a version.
+                  </>
+                )}
               </p>
             )}
 
@@ -202,7 +209,7 @@ export default function RecordDrawer({
               <table className="table versions">
                 <thead>
                   <tr>
-                    {admin && <th className="pick" aria-label="Compare" />}
+                    {canCompare && <th className="pick" aria-label="Compare" />}
                     <th>Version</th>
                     <th>Configuration</th>
                     <th>Changed</th>
@@ -212,7 +219,7 @@ export default function RecordDrawer({
                 <tbody>
                   {detail.versions.map((v) => (
                     <tr key={v.version} className={picked.includes(v.version) ? 'selected' : undefined}>
-                      {admin && (
+                      {canCompare && (
                         <td className="pick">
                           <input
                             type="checkbox"

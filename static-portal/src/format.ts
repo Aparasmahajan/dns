@@ -1,6 +1,9 @@
 import type { AccessLevel, ChangeRequest, CrStatus, MappingType, Me, Operation } from './types';
 
 export const isAdmin = (me: Me) => me.level === 'ADMIN';
+export const isAuditor = (me: Me) => me.level === 'AUDITOR';
+/** The Administration screens: the Admin uses them, the Auditor only views them. */
+export const canViewAdministration = (me: Me) => isAdmin(me) || isAuditor(me);
 export const isChecker = (me: Me) => me.level === 'CHECKER' || me.level === 'ADMIN';
 export const canWrite = (me: Me) => me.level === 'WRITE' || isChecker(me);
 
@@ -14,6 +17,8 @@ export function levelLabel(level: AccessLevel): string {
       return 'Checker';
     case 'ADMIN':
       return 'Admin';
+    case 'AUDITOR':
+      return 'Auditor';
     default:
       return 'No access';
   }

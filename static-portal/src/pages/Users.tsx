@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { AlertTriangle, BookUser, CheckCircle2, ClipboardList, Copy, Info, KeyRound, Lock, Pencil, Search, ShieldCheck, UserCheck, UserPlus, UserX, Users as UsersIcon, XCircle } from 'lucide-react';
+import { AlertTriangle, BookUser, CheckCircle2, ClipboardList, Copy, Eye, Info, KeyRound, Lock, Pencil, Search, ShieldCheck, UserCheck, UserPlus, UserX, Users as UsersIcon, XCircle } from 'lucide-react';
 import { api, errorMessage, notifyChanged } from '../api';
 import { useToast } from '../components/Toast';
-import { useAuth } from '../auth';
+import { useAuth, useMe } from '../auth';
 import DepartmentSelect from '../components/DepartmentSelect';
 import PartitionPicker from '../components/PartitionPicker';
 import { Empty, Loading, Modal, UserStatusBadge } from '../components/ui';
-import { fmtDateTime, initials, levelLabel, timeAgo } from '../format';
+import { fmtDateTime, initials, isAdmin, levelLabel, timeAgo } from '../format';
 import type { AccessLevel, DirectoryEntry, Group, UserRow, UserWithPassword } from '../types';
 
 type Tab = 'ALL' | 'PENDING' | 'ACTIVE' | 'DISABLED';
@@ -15,6 +15,7 @@ const LEVELS: { level: AccessLevel; title: string; desc: string }[] = [
   { level: 'READ', title: 'Read only', desc: 'Sees records and requests in all partitions. Cannot change anything.' },
   { level: 'WRITE', title: 'Read + Write', desc: 'Raises changes in the partitions you pick below. Every change needs approval.' },
   { level: 'CHECKER', title: 'Checker', desc: 'All partitions. Approves Write requests; own changes apply directly.' },
+  { level: 'AUDITOR', title: 'Auditor', desc: 'View only, all partitions. Also sees users, access requests and the audit trail. Cannot change anything.' },
 ];
 
 const sourceLabel = { CONFIG: 'Configuration', LOCAL: 'Local', LDAP: 'Bank LDAP' } as const;
@@ -372,7 +373,7 @@ function UserModal({
             empty="No partitions exist yet. Create one under Partitions first."
           />
         )}
-        {(level === 'READ' || level === 'CHECKER') && <p className="hint" style={{ marginBottom: 16 }}>{levelLabel(level)} always covers all partitions.</p>}
+        {(level === 'READ' || level === 'CHECKER' || level === 'AUDITOR') && <p className="hint" style={{ marginBottom: 16 }}>{levelLabel(level)} always covers all partitions.</p>}
       </form>
     </Modal>
   );
@@ -412,8 +413,85 @@ function TempPasswordModal({ username, password, onClose }: { username: string; 
   );
 }
 
+/** The Auditor's view of one user and their latest access request (no actions). */
+function UserViewModal({ user, onClose }: { user: UserRow; onClose: () => void }) {
+  const r = user.accessRequest;
+  return (
+    <Modal
+      title={user.displayName || user.username}
+      onClose={onClose}
+      footer={
+        <button className="btn" onClick={onClose}>
+          Close
+        </button>
+      }
+    >
+      <dl className="kv" style={{ marginBottom: r ? 18 : 0 }}>
+        <dt>User ID</dt>
+        <dd className="mono">{user.username}</dd>
+        <dt>Source</dt>
+        <dd>{sourceLabel[user.source]}</dd>
+        <dt>Email</dt>
+        <dd>{user.email ?? '—'}</dd>
+        <dt>Department</dt>
+        <dd>{user.department ?? '—'}</dd>
+        <dt>Access</dt>
+        <dd>{user.status === 'PENDING' ? 'Waiting for access' : levelLabel(user.level)}</dd>
+        <dt>Partitions</dt>
+        <dd>{user.status === 'PENDING' ? '—' : user.allGroups ? 'All partitions' : user.groups.map((g) => g.name).join(', ') || '—'}</dd>
+        <dt>Status</dt>
+        <dd>
+          <UserStatusBadge status={user.status} locked={user.locked} />
+        </dd>
+        <dt>Last sign-in</dt>
+        <dd>{user.lastLoginAt ? fmtDateTime(user.lastLoginAt) : 'Never'}</dd>
+        <dt>Created</dt>
+        <dd>
+          {fmtDateTime(user.createdAt)}
+          {user.createdBy ? ` by ${user.createdBy}` : ''}
+        </dd>
+      </dl>
+      {r && (
+        <>
+          <div className="section-title">Access request</div>
+          <dl className="kv">
+            <dt>Status</dt>
+            <dd>{r.status === 'OPEN' ? 'Waiting for the Admin' : r.status === 'GRANTED' ? 'Granted' : 'Declined'}</dd>
+            <dt>Department</dt>
+            <dd>{r.department}</dd>
+            <dt>Access asked</dt>
+            <dd>{levelLabel(r.requestedLevel)}</dd>
+            <dt>Partitions asked</dt>
+            <dd>{r.requestedGroups.length ? r.requestedGroups.map((g) => g.name).join(', ') : '—'}</dd>
+            <dt>Reason</dt>
+            <dd>{r.reason}</dd>
+            <dt>Raised</dt>
+            <dd>{fmtDateTime(r.createdAt)}</dd>
+            {r.decidedBy && (
+              <>
+                <dt>Decided</dt>
+                <dd>
+                  {fmtDateTime(r.decidedAt)} by {r.decidedBy}
+                </dd>
+              </>
+            )}
+            {r.decisionComment && (
+              <>
+                <dt>Comment</dt>
+                <dd>{r.decisionComment}</dd>
+              </>
+            )}
+          </dl>
+        </>
+      )}
+    </Modal>
+  );
+}
+
 export default function UsersPage() {
   const toast = useToast();
+  const admin = isAdmin(useMe());
+  const [viewing, setViewing] = useState<UserRow | null>(null);
   const [users, setUsers] = useState<UserRow[] | null>(null);
   const [groups, setGroups] = useState<Group[]>([]);
   const [tab, setTab] = useState<Tab | null>(null);
@@ -498,17 +576,21 @@ export default function UsersPage() {
           <div className="crumb">Administration</div>
           <h1>Users &amp; Access</h1>
           <div className="sub">
-            Find Bank users by ID and give them access, approve first-time directory sign-ins, create local users, and assign roles and partitions.
+            {admin
+              ? 'Find Bank users by ID and give them access, approve first-time directory sign-ins, create local users, and assign roles and partitions.'
+              : 'View users, their access and their access requests. Only the Admin can make changes.'}
           </div>
         </div>
-        <div className="page-actions">
-          <button className="btn" onClick={() => setEditing('new')} style={{ height: 42 }}>
-            <UserPlus size={17} /> Add local user
-          </button>
-          <button className="btn btn-primary" onClick={() => setLookingUp(true)} style={{ height: 42 }}>
-            <BookUser size={17} /> Add from Bank directory
-          </button>
-        </div>
+        {admin && (
+          <div className="page-actions">
+            <button className="btn" onClick={() => setEditing('new')} style={{ height: 42 }}>
+              <UserPlus size={17} /> Add local user
+            </button>
+            <button className="btn btn-primary" onClick={() => setLookingUp(true)} style={{ height: 42 }}>
+              <BookUser size={17} /> Add from Bank directory
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="card">
@@ -606,7 +688,11 @@ export default function UsersPage() {
                       {u.lastLoginAt ? timeAgo(u.lastLoginAt) : 'Never'}
                     </td>
                     <td className="actions">
-                      {u.managedByConfig ? (
+                      {!admin ? (
+                        <button className="btn btn-ghost btn-icon" title="View details" aria-label={`View ${u.username}`} onClick={() => setViewing(u)}>
+                          <Eye size={16} />
+                        </button>
+                      ) : u.managedByConfig ? (
                         <span className="muted small">Managed in configuration</span>
                       ) : (
                         <>
@@ -680,6 +766,7 @@ export default function UsersPage() {
           }}
         />
       )}
+      {viewing && <UserViewModal user={viewing} onClose={() => setViewing(null)} />}
       {temp && <TempPasswordModal username={temp.username} password={temp.password} onClose={() => setTemp(null)} />}
       {confirm && (
         <Modal

@@ -1,0 +1,10 @@
+https://clouddocs.f5.com/api/icontrol-rest/
+https://clouddocs.f5.com/api/icontrol-rest/APIRef_tm_gtm.html
+https://my.f5.com/manage/s/article/K16153652
+https://my.f5.com/manage/s/article/K45508216
+https://my.f5.com/manage/s/article/K14724629
+https://clouddocs.f5.com/products/extensions/f5-appsvcs-extension/latest/declarations/gslb.html
+https://clouddocs.f5.com/products/big-iq/mgmt-api/v0.0/
+https://my.f5.com/manage/s/article/K000152849
+https://my.f5.com/manage/s/article/K000092968
+https://clouddocs.f5.com/api/velos-api/velos-api-index.html 

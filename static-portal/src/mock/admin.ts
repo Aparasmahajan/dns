@@ -143,7 +143,8 @@ function checkDepartment(db: Db, value: unknown, current: string | null): string
 }
 
 function applyAccess(db: Db, u: UserRec, level: unknown, groupIds: unknown) {
-  if (level !== 'READ' && level !== 'WRITE' && level !== 'CHECKER') throw badRequest('Choose an access level: Read only, Read + Write or Checker.');
+  if (level !== 'READ' && level !== 'WRITE' && level !== 'CHECKER' && level !== 'AUDITOR')
+    throw badRequest('Choose an access level: Read only, Read + Write, Checker or Auditor.');
   let assigned: number[] = [];
   if (level === 'WRITE') {
     const wanted = [...new Set(Array.isArray(groupIds) ? groupIds.map(Number) : [])];
@@ -342,7 +343,8 @@ export function submitAccessRequest(ctx: Ctx) {
   const department = checkDepartment(db, b.department, user.department);
   if (!department || department.length < 2) throw badRequest('Choose your department.');
   const level = b.level;
-  if (level !== 'READ' && level !== 'WRITE' && level !== 'CHECKER') throw badRequest('Choose the access you need: Read only, Read + Write or Checker.');
+  if (level !== 'READ' && level !== 'WRITE' && level !== 'CHECKER' && level !== 'AUDITOR')
+    throw badRequest('Choose the access you need: Read only, Read + Write, Checker or Auditor.');
   let ids: number[] = [];
   if (level === 'WRITE') {
     const wanted = [...new Set(Array.isArray(b.groupIds) ? b.groupIds.map(Number) : [])];
