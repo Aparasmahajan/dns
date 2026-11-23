@@ -10,7 +10,7 @@ what the API integration work needs to know.
 F5/
 ├── context.md                     master project notes (03-Nov; see section 3 below for later decisions)
 ├── requiments.md                  draft request to F5 for the API documentation (items A–G).
-│                                  It still says "Python FastAPI": fix to Java/Spring Boot before sending.
+│                                  Stack corrected to Java/Spring Boot on 20-Nov-2026.
 ├── docs/
 │   ├── F5-DNS-Portal-Solution-Proposal-v2.2.docx/.pdf   agreed baseline (supersedes v2.0 / v2.1)
 │   ├── F5-DNS-Portal-Requirements-v1.0.docx/.pdf        requirements, for SBI + Starlight (no build status)
@@ -155,7 +155,7 @@ These are in requirements v1.0 or follow from it.
 
 ## 7. Suggested first steps
 
-1. Commit the 5 pending files in `portal`. Fix "FastAPI" in `requiments.md` and send the F5 request.
+1. Commit the 5 pending files in `portal`. Send the F5 request (`requiments.md`; stack fixed to Java/Spring Boot on 20-Nov).
 2. Design the execution state machine and the per-site idempotency (section 5, items 1–3) against the
    `DnsProvisioner` interface. This can start before the F5 documentation arrives.
 3. Add portal API tests to the repo, so the integration work has a safety net.

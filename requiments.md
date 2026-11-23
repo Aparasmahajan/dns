@@ -1,4 +1,4 @@
-We are working on an F5 BIG-IP DNS implementation for our customer. As part of this project, we are building a web portal for managing DNS (the Front-End Management System, FMS). It will connect to the BIG-IP DNS devices through REST APIs. The portal uses React for the frontend and Python FastAPI for the backend.
+We are working on an F5 BIG-IP DNS implementation for our customer. As part of this project, we are building a web portal for managing DNS (the Front-End Management System, FMS). It will connect to the BIG-IP DNS devices through REST APIs. The portal uses React (TypeScript) for the frontend and Java 21 with Spring Boot for the backend.
 
 Please share the official REST API documentation, the list of supported endpoints and any related technical guides. The details we need are listed below.
 

@@ -1,0 +1,631 @@
+curl --location 'https://10.1.1.5/mgmt/shared/authn/login' \
+--header 'Cookie: BIGIPAuthCookie=lWSN5IXMKRv0JSih2twzt2diGBL6OVJSmZYn3wv4; BIGIPAuthUsernameCookie=admin' \
+--header 'Content-Type: application/json' \
+--header 'Authorization: Basic YWRtaW46cGFydmV6MzAwMg==' \
+--data '{
+    "username": admin,
+    "password": parvez3002,
+    "loginProviderName": "tmos"
+}'
+
+
+{
+    "username": "admin",
+    "loginReference": {
+        "link": "https://localhost/mgmt/cm/system/authn/providers/tmos/1f44a60e-11a7-3c51-a49f-82983026b41b/login"
+    },
+    "loginProviderName": "tmos",
+    "token": {
+        "token": "3ZKTA7D7JBAR6HYMZUFJ7PUPBX",
+        "name": "3ZKTA7D7JBAR6HYMZUFJ7PUPBX",
+        "userName": "admin",
+        "authProviderName": "tmos",
+        "user": {
+            "link": "https://localhost/mgmt/shared/authz/users/admin"
+        },
+        "timeout": 1200,
+        "startTime": "2026-11-05T20:43:07.231+0530",
+        "address": "10.1.1.1",
+        "partition": "[All]",
+        "generation": 1,
+        "lastUpdateMicros": 1793891587230258,
+        "expirationMicros": 1793892787231000,
+        "kind": "shared:authz:tokens:authtokenitemstate",
+        "selfLink": "https://localhost/mgmt/shared/authz/tokens/3ZKTA7D7JBAR6HYMZUFJ7PUPBX"
+    },
+    "generation": 0,
+    "lastUpdateMicros": 0
+}
+
+
+
+
+
+
+
+
+
+
+curl --location 'https://10.1.1.5/mgmt/tm/sys/version' \
+--header 'Cookie: BIGIPAuthCookie=lWSN5IXMKRv0JSih2twzt2diGBL6OVJSmZYn3wv4; BIGIPAuthUsernameCookie=admin' \
+--header 'Authorization: Basic YWRtaW46cGFydmV6MzAwMg=='
+
+{
+    "kind": "tm:sys:version:versionstats",
+    "selfLink": "https://localhost/mgmt/tm/sys/version?ver=21.1.0.1",
+    "entries": {
+        "https://localhost/mgmt/tm/sys/version/0": {
+            "nestedStats": {
+                "entries": {
+                    "Build": {
+                        "description": "0.0.26"
+                    },
+                    "Date": {
+                        "description": "Tue Jul 14 05:03:24 PDT 2026"
+                    },
+                    "Edition": {
+                        "description": "Point Release 1"
+                    },
+                    "Product": {
+                        "description": "BIG-IP"
+                    },
+                    "Title": {
+                        "description": "Main Package"
+                    },
+                    "Version": {
+                        "description": "21.1.0.1"
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+
+
+
+curl --location 'https://10.1.1.5/mgmt/tm/sys/version' \
+--header 'X-F5-Auth-Token: 3ZKTA7D7JBAR6HYMZUFJ7PUPBX' \
+--header 'Accept: application/json' \
+--header 'Cookie: BIGIPAuthCookie=lWSN5IXMKRv0JSih2twzt2diGBL6OVJSmZYn3wv4; BIGIPAuthUsernameCookie=admin' \
+--header 'Authorization: Basic YWRtaW46cGFydmV6MzAwMg==' \
+--data ''
+
+
+{
+    "kind": "tm:sys:version:versionstats",
+    "selfLink": "https://localhost/mgmt/tm/sys/version?ver=21.1.0.1",
+    "entries": {
+        "https://localhost/mgmt/tm/sys/version/0": {
+            "nestedStats": {
+                "entries": {
+                    "Build": {
+                        "description": "0.0.26"
+                    },
+                    "Date": {
+                        "description": "Tue Jul 14 05:03:24 PDT 2026"
+                    },
+                    "Edition": {
+                        "description": "Point Release 1"
+                    },
+                    "Product": {
+                        "description": "BIG-IP"
+                    },
+                    "Title": {
+                        "description": "Main Package"
+                    },
+                    "Version": {
+                        "description": "21.1.0.1"
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+
+
+
+curl --location 'https://10.1.1.5/mgmt/tm/sys/provision?%24select=name%2Clevel' \
+--header 'X-F5-Auth-Token: 3ZKTA7D7JBAR6HYMZUFJ7PUPBX' \
+--header 'Accept: application/json' \
+--header 'Cookie: BIGIPAuthCookie=lWSN5IXMKRv0JSih2twzt2diGBL6OVJSmZYn3wv4; BIGIPAuthUsernameCookie=admin'
+
+{
+    "kind": "tm:sys:provision:provisioncollectionstate",
+    "selfLink": "https://localhost/mgmt/tm/sys/provision?$select=name%2Clevel&ver=21.1.0.1",
+    "items": [
+        {
+            "name": "afm",
+            "level": "none"
+        },
+        {
+            "name": "apm",
+            "level": "none"
+        },
+        {
+            "name": "asm",
+            "level": "none"
+        },
+        {
+            "name": "avr",
+            "level": "none"
+        },
+        {
+            "name": "cgnat",
+            "level": "none"
+        },
+        {
+            "name": "dos",
+            "level": "none"
+        },
+        {
+            "name": "fps",
+            "level": "none"
+        },
+        {
+            "name": "gtm",
+            "level": "none"
+        },
+        {
+            "name": "ilx",
+            "level": "none"
+        },
+        {
+            "name": "lc",
+            "level": "none"
+        },
+        {
+            "name": "ltm",
+            "level": "nominal"
+        },
+        {
+            "name": "pem",
+            "level": "none"
+        },
+        {
+            "name": "sslo",
+            "level": "none"
+        },
+        {
+            "name": "swg",
+            "level": "none"
+        },
+        {
+            "name": "urldb",
+            "level": "none"
+        }
+    ]
+}
+
+
+
+
+
+curl --location 'https://10.1.1.5/mgmt/tm/cm/device' \
+--header 'X-F5-Auth-Token: 3ZKTA7D7JBAR6HYMZUFJ7PUPBX' \
+--header 'Accept: application/json' \
+--header 'Cookie: BIGIPAuthCookie=lWSN5IXMKRv0JSih2twzt2diGBL6OVJSmZYn3wv4; BIGIPAuthUsernameCookie=admin'
+
+{
+    "kind": "tm:cm:device:devicecollectionstate",
+    "selfLink": "https://localhost/mgmt/tm/cm/device?ver=21.1.0.1",
+    "items": [
+        {
+            "kind": "tm:cm:device:devicestate",
+            "name": "www.parvez.com",
+            "partition": "Common",
+            "fullPath": "/Common/www.parvez.com",
+            "generation": 1,
+            "selfLink": "https://localhost/mgmt/tm/cm/device/~Common~www.parvez.com?ver=21.1.0.1",
+            "activeModules": [
+                "BIG-IP, VE Trial|EFPBSYU-KAVOSXR|Rate Shaping|External Interface and Network HSM, VE|SDN Services, VE|SSL, Forward Proxy, VE|BIG-IP VE, Multicast Routing|APM, Limited|SSL, VE|DNS (1K QPS), VE|Routing Bundle, VE|ASM, VE|Crytpo Offload, VE, Tier 1 (25M - 200M)|Max Compression, VE|Advanced Web Application Firewall, VE|AFM, VE|DNSSEC|Anti-Virus Checks|Base Endpoint Security Checks|Firewall Checks|Network Access|Secure Virtual Keyboard|APM, Web Application|Machine Certificate Checks|Protected Workspace|Remote Desktop|App Tunnel|PSM, VE|VE, Carrier Grade NAT (AFM ONLY)"
+            ],
+            "alternateIp": "none",
+            "baseMac": "00:0c:29:f5:7b:fc",
+            "build": "0.0.26",
+            "cert": "/Common/dtdi.crt",
+            "certReference": {
+                "link": "https://localhost/mgmt/tm/cm/cert/~Common~dtdi.crt?ver=21.1.0.1"
+            },
+            "chassisId": "564d84b2-a8ca-fa25-ff51aaf57bfc",
+            "chassisType": "individual",
+            "configsyncIp": "10.1.30.1",
+            "edition": "Point Release 1",
+            "failoverState": "active",
+            "haCapacity": 0,
+            "hostname": "www.parvez.com",
+            "key": "/Common/dtdi.key",
+            "keyReference": {
+                "link": "https://localhost/mgmt/tm/cm/key/~Common~dtdi.key?ver=21.1.0.1"
+            },
+            "managementIp": "10.1.1.5",
+            "marketingName": "BIG-IP Virtual Edition",
+            "mgmtUnicastMode": "both",
+            "mirrorIp": "10.1.30.1",
+            "mirrorSecondaryIp": "any6",
+            "multicastIp": "any6",
+            "multicastPort": 0,
+            "platformId": "Z100",
+            "product": "BIG-IP",
+            "selfDevice": "true",
+            "timeZone": "Asia/Calcutta",
+            "version": "21.1.0.1",
+            "unicastAddress": [
+                {
+                    "effectiveIp": "10.1.30.1",
+                    "effectivePort": 1026,
+                    "ip": "10.1.30.1",
+                    "port": 1026
+                }
+            ]
+        }
+    ]
+}
+
+
+
+curl --location 'https://10.1.1.5/mgmt/tm/cm/sync-status' \
+--header 'X-F5-Auth-Token: 3ZKTA7D7JBAR6HYMZUFJ7PUPBX' \
+--header 'Accept: application/json' \
+--header 'Cookie: BIGIPAuthCookie=lWSN5IXMKRv0JSih2twzt2diGBL6OVJSmZYn3wv4; BIGIPAuthUsernameCookie=admin'
+
+{
+    "kind": "tm:cm:sync-status:sync-statusstats",
+    "selfLink": "https://localhost/mgmt/tm/cm/sync-status?ver=21.1.0.1",
+    "entries": {
+        "https://localhost/mgmt/tm/cm/sync-status/0": {
+            "nestedStats": {
+                "entries": {
+                    "color": {
+                        "description": "green"
+                    },
+                    "https://localhost/mgmt/tm/cm/syncStatus/0/details": {
+                        "nestedStats": {
+                            "entries": {
+                                "https://localhost/mgmt/tm/cm/syncStatus/0/details/0": {
+                                    "nestedStats": {
+                                        "entries": {
+                                            "details": {
+                                                "description": "Optional action: Add a device to the trust domain"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "mode": {
+                        "description": "standalone"
+                    },
+                    "status": {
+                        "description": "Standalone"
+                    },
+                    "summary": {
+                        "description": " "
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+
+
+
+curl --location 'https://10.1.1.5/mgmt/tm/sys/host-info' \
+--header 'X-F5-Auth-Token: 3ZKTA7D7JBAR6HYMZUFJ7PUPBX' \
+--header 'Accept: application/json' \
+--header 'Cookie: BIGIPAuthCookie={{BIGIP_AUTH_COOKIE}}; BIGIPAuthUsernameCookie={{F5_USERNAME}}'
+
+
+
+{
+    "kind": "tm:sys:host-info:host-infostats",
+    "selfLink": "https://localhost/mgmt/tm/sys/host-info?ver=21.1.0.1",
+    "entries": {
+        "https://localhost/mgmt/tm/sys/host-info/0": {
+            "nestedStats": {
+                "entries": {
+                    "activeCpuCount": {
+                        "value": 2
+                    },
+                    "cpuCount": {
+                        "value": 2
+                    },
+                    "https://localhost/mgmt/tm/sys/hostInfo/0/cpuInfo": {
+                        "nestedStats": {
+                            "entries": {
+                                "https://localhost/mgmt/tm/sys/hostInfo/0/cpuInfo/0": {
+                                    "nestedStats": {
+                                        "entries": {
+                                            "cpuId": {
+                                                "value": 0
+                                            },
+                                            "fiveMinAvgIdle": {
+                                                "value": 77
+                                            },
+                                            "fiveMinAvgIowait": {
+                                                "value": 0
+                                            },
+                                            "fiveMinAvgIrq": {
+                                                "value": 0
+                                            },
+                                            "fiveMinAvgNiced": {
+                                                "value": 0
+                                            },
+                                            "fiveMinAvgSoftirq": {
+                                                "value": 0
+                                            },
+                                            "fiveMinAvgStolen": {
+                                                "value": 0
+                                            },
+                                            "fiveMinAvgSystem": {
+                                                "value": 2
+                                            },
+                                            "fiveMinAvgUser": {
+                                                "value": 8
+                                            },
+                                            "fiveSecAvgIdle": {
+                                                "value": 78
+                                            },
+                                            "fiveSecAvgIowait": {
+                                                "value": 0
+                                            },
+                                            "fiveSecAvgIrq": {
+                                                "value": 0
+                                            },
+                                            "fiveSecAvgNiced": {
+                                                "value": 0
+                                            },
+                                            "fiveSecAvgRatio": {
+                                                "value": 10
+                                            },
+                                            "fiveSecAvgSoftirq": {
+                                                "value": 0
+                                            },
+                                            "fiveSecAvgStolen": {
+                                                "value": 0
+                                            },
+                                            "fiveSecAvgSystem": {
+                                                "value": 1
+                                            },
+                                            "fiveSecAvgUser": {
+                                                "value": 7
+                                            },
+                                            "idle": {
+                                                "value": 148838
+                                            },
+                                            "iowait": {
+                                                "value": 2018
+                                            },
+                                            "irq": {
+                                                "value": 0
+                                            },
+                                            "niced": {
+                                                "value": 420
+                                            },
+                                            "oneMinAvgIdle": {
+                                                "value": 77
+                                            },
+                                            "oneMinAvgIowait": {
+                                                "value": 1
+                                            },
+                                            "oneMinAvgIrq": {
+                                                "value": 0
+                                            },
+                                            "oneMinAvgNiced": {
+                                                "value": 0
+                                            },
+                                            "oneMinAvgSoftirq": {
+                                                "value": 0
+                                            },
+                                            "oneMinAvgStolen": {
+                                                "value": 0
+                                            },
+                                            "oneMinAvgSystem": {
+                                                "value": 2
+                                            },
+                                            "oneMinAvgUser": {
+                                                "value": 8
+                                            },
+                                            "softirq": {
+                                                "value": 2058
+                                            },
+                                            "stolen": {
+                                                "value": 0
+                                            },
+                                            "system": {
+                                                "value": 13370
+                                            },
+                                            "user": {
+                                                "value": 27822
+                                            }
+                                        }
+                                    }
+                                },
+                                "https://localhost/mgmt/tm/sys/hostInfo/0/cpuInfo/1": {
+                                    "nestedStats": {
+                                        "entries": {
+                                            "cpuId": {
+                                                "value": 1
+                                            },
+                                            "fiveMinAvgIdle": {
+                                                "value": 76
+                                            },
+                                            "fiveMinAvgIowait": {
+                                                "value": 1
+                                            },
+                                            "fiveMinAvgIrq": {
+                                                "value": 0
+                                            },
+                                            "fiveMinAvgNiced": {
+                                                "value": 0
+                                            },
+                                            "fiveMinAvgSoftirq": {
+                                                "value": 0
+                                            },
+                                            "fiveMinAvgStolen": {
+                                                "value": 0
+                                            },
+                                            "fiveMinAvgSystem": {
+                                                "value": 2
+                                            },
+                                            "fiveMinAvgUser": {
+                                                "value": 9
+                                            },
+                                            "fiveSecAvgIdle": {
+                                                "value": 78
+                                            },
+                                            "fiveSecAvgIowait": {
+                                                "value": 0
+                                            },
+                                            "fiveSecAvgIrq": {
+                                                "value": 0
+                                            },
+                                            "fiveSecAvgNiced": {
+                                                "value": 0
+                                            },
+                                            "fiveSecAvgRatio": {
+                                                "value": 12
+                                            },
+                                            "fiveSecAvgSoftirq": {
+                                                "value": 0
+                                            },
+                                            "fiveSecAvgStolen": {
+                                                "value": 0
+                                            },
+                                            "fiveSecAvgSystem": {
+                                                "value": 1
+                                            },
+                                            "fiveSecAvgUser": {
+                                                "value": 9
+                                            },
+                                            "idle": {
+                                                "value": 148705
+                                            },
+                                            "iowait": {
+                                                "value": 1286
+                                            },
+                                            "irq": {
+                                                "value": 0
+                                            },
+                                            "niced": {
+                                                "value": 350
+                                            },
+                                            "oneMinAvgIdle": {
+                                                "value": 73
+                                            },
+                                            "oneMinAvgIowait": {
+                                                "value": 1
+                                            },
+                                            "oneMinAvgIrq": {
+                                                "value": 0
+                                            },
+                                            "oneMinAvgNiced": {
+                                                "value": 0
+                                            },
+                                            "oneMinAvgSoftirq": {
+                                                "value": 0
+                                            },
+                                            "oneMinAvgStolen": {
+                                                "value": 0
+                                            },
+                                            "oneMinAvgSystem": {
+                                                "value": 3
+                                            },
+                                            "oneMinAvgUser": {
+                                                "value": 11
+                                            },
+                                            "softirq": {
+                                                "value": 2660
+                                            },
+                                            "stolen": {
+                                                "value": 0
+                                            },
+                                            "system": {
+                                                "value": 11871
+                                            },
+                                            "user": {
+                                                "value": 29173
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "hostId": {
+                        "description": "0"
+                    },
+                    "memoryTotal": {
+                        "value": 4145131520
+                    },
+                    "memoryUsed": {
+                        "value": 1427642272
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+curl --location 'https://10.1.1.5/mgmt/tm/sys/folder?%24select=name%2CfullPath' \
+--header 'X-F5-Auth-Token: 3ZKTA7D7JBAR6HYMZUFJ7PUPBX' \
+--header 'Accept: application/json' \
+--header 'Cookie: BIGIPAuthCookie={{BIGIP_AUTH_COOKIE}}; BIGIPAuthUsernameCookie={{F5_USERNAME}}'
+
+{
+    "kind": "tm:sys:folder:foldercollectionstate",
+    "selfLink": "https://localhost/mgmt/tm/sys/folder?$select=name%2CfullPath&ver=21.1.0.1",
+    "items": [
+        {
+            "name": "/",
+            "fullPath": "/"
+        },
+        {
+            "name": "Client_01",
+            "fullPath": "/Client_01"
+        },
+        {
+            "name": "Common",
+            "fullPath": "/Common"
+        },
+        {
+            "name": "Drafts",
+            "fullPath": "/Common/Drafts"
+        },
+        {
+            "name": "ServiceDiscovery",
+            "fullPath": "/Common/ServiceDiscovery"
+        },
+        {
+            "name": "appsvcs",
+            "fullPath": "/Common/appsvcs"
+        },
+        {
+            "name": "asm_nsyncd",
+            "fullPath": "/Common/asm_nsyncd"
+        },
+        {
+            "name": "datasync-global",
+            "fullPath": "/Common/datasync-global"
+        },
+        {
+            "name": "External_User",
+            "fullPath": "/External_User"
+        },
+        {
+            "name": "Internal_User",
+            "fullPath": "/Internal_User"
+        }
+    ]
+}
+
+
+
+

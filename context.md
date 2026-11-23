@@ -1,6 +1,6 @@
 # Project Context – SBI DNS Front-End Portal
 
-Last updated: 14-Nov-2026 (full refresh 06-Nov; decisions to 09-Nov; 13-Nov mail pack, timeline and SBOM rebuild added)
+Last updated: 20-Nov-2026 (full refresh 06-Nov; decisions to 09-Nov; 13-Nov mail pack; 19–20 Nov lab findings, F5 collections, F5 simulator and end-to-end test added)
 
 ## 1. What this project is
 
@@ -12,11 +12,15 @@ Last updated: 14-Nov-2026 (full refresh 06-Nov; decisions to 09-Nov; 13-Nov mail
 - **LB team:** maintains the Bank's load balancers (portal VIPs, GSLB, health checks, TLS, WAF). Outgoing docs call them "LB team". On 27-Oct the user said Starlight maintains the LB.
 - **Network Integrator (NI):** the Bank's network partner; receives knowledge transfer along with the Bank.
 - The bid went to a reverse auction, and F5 has pushed hard on cost.
-- **Current phase (13/14-Nov-2026):**
+- **Current phase (20-Nov-2026):**
   - Requirements are at internal v1.2, issued externally on 13-Nov as **v1.0** (see §4).
   - The first build increment of the portal runs locally in Docker, with **F5 mocked**. The Auditor level was added on 09-Nov.
+    On 20-Nov it was rebuilt on the Linux laptop and passed a **55-check end-to-end test** (see §9).
   - A status mail with the requirements, proposal, development timeline and SBOM was drafted on 13-Nov (`mail 13 Nov 2026/`).
-  - Next is the real F5 API integration. It waits for the F5 API documentation, the supported way to manage A/AAAA/PTR records, and a test F5 GTM (needed by 2-Dec per the timeline).
+  - F5 preparation is ready: Postman collections and curl scripts for BIG-IP and BIG-IQ (with a "Q Questions" folder for the
+    lab team), and an **F5 API simulator** (`f5-simulator/`) that the BIG-IP collection passes against.
+  - A lab BIG-IP VE exists (see §10a). Next is the real F5 API integration. It waits for the answers to the 4 deciding
+    questions (§12), the F5 API documentation, and the lab DNS module being switched on (needed by 2-Dec per the timeline).
 
 ## 2. Key people (from email thread)
 
@@ -39,7 +43,7 @@ The whole `F5/` folder is a **git repo** (4 commits, 05-Nov; everything added si
 F5/
 ├── context.md                ← this file (master project notes)
 ├── requiments.md             Draft request to F5 for API documentation (items A–G, 28 points).
-│                             ⚠ Still says "Python FastAPI" backend → fix to Java/Spring Boot before sending.
+│                             Stack corrected to Java 21 + Spring Boot on 20-Nov-2026.
 ├── docs/                     Source documents
 │   ├── Portal specification.pdf                   RFP extract p.73–76 (H20–H24, I1–I7, J1–J5)
 │   ├── SBI-DNS-Revised-Azalio-updated.xlsx        Compliance sheet, whole F5 bid (A–J)
@@ -69,7 +73,18 @@ F5/
 │   ├── F5-API-Checks.md                       curl checks with expected output (BIG-IP DNS 16.1)
 │   ├── f5-api-check.sh                        read-only check script (GET only + token login/logout)
 │   ├── api_links.txt                          iControl REST, GTM API, BIG-IQ API, AS3 GSLB, VELOS API, K-articles
-│   └── icontrol-rest-api-user-guide-16-1-0_8528.pdf
+│   ├── icontrol-rest-api-user-guide-16-1-0_8528.pdf
+│   ├── F5-API-Sequence.md                     step-by-step API guide (login → token → checks → all data → change → clean up)
+│   ├── F5-BIGIP-DNS-Lab.postman_collection.json       88 BIG-IP requests by topic (token auto-login)
+│   ├── F5-BIGIP-DNS-Sequence.postman_collection.json  BIG-IP sequence for the Runner + "Q Questions" (16 API + 13 by hand)
+│   ├── f5-api-sequence.sh                     the same BIG-IP sequence as curl (needs jq)
+│   ├── F5-BIGIQ-DNS-Sequence.postman_collection.json  BIG-IQ version (working-config + deploy task) + "Q Questions"
+│   │                                         (10 API + 9 by hand); 10 steps marked [verify], no BIG-IQ to test on
+│   ├── f5-bigiq-sequence.sh                   the same BIG-IQ sequence as curl
+│   └── SBI-api.txt                            lab BIG-IP output (19-Nov). ⚠ Contains the lab admin password: never commit
+├── f5-simulator/             F5 BIG-IP DNS API simulator (own git repo, local only; Python stdlib + Docker), 20-Nov:
+│                             DC/DR/AZ on https://localhost:8443-8445, sync group on/off, per-site failure injection,
+│                             transactions, paging. 13 tests pass; the BIG-IP sequence collection passes (82 requests)
 ├── dns-portal/docs/          empty now (the old engineering pack lives in the snapshot below)
 └── analysis/
     ├── 06-api-integration-handover.md   Handover for the F5 API integration: where things are, decisions,
@@ -97,7 +112,7 @@ The SBOM template is `Downloads\SBI_SBOM.docx`. The old build scripts (`build_sb
   - internal requirements **v1.2** = external **Requirements Specification v1.0** (13-Nov-2026).
   - The older files in `docs/` with the same numbers (v2.1 of 03-Nov, v1.0 of 05-Nov) are different internal drafts. In anything sent out, cite the external numbers.
 - **Stack** = Java 21 + Spring Boot, React (TypeScript), PostgreSQL 16, NGINX, Fluent Bit, on RHEL 9. Don't change the stack anywhere without asking.
-  - FastAPI (in `requiments.md`) and NestJS/Next.js (in the old pack) are **not** decisions.
+  - NestJS/Next.js (in the old pack) is **not** a decision. (`requiments.md` said FastAPI; corrected 20-Nov.)
 
 ## 5. RFP requirements in one line each (J1–J5)
 
@@ -245,7 +260,13 @@ The local dev versions below are **actual**, not just planned:
 - Partitions: Internet_Banking, Core_Banking, UPI_Payments.
 
 **Tests and other code**
-- Portal API tests are **not in the repo** yet; the handover says to add them.
+- **End-to-end test, 20-Nov-2026 (Linux laptop, Docker Desktop): 55 of 55 checks passed** through NGINX on http://localhost:8088,
+  with Java 21.0.13, PostgreSQL 16.16, migrations V1–V4, sample data and the mock LDAP. Covered: front door (headers, CSRF,
+  401), onboarding (directory grant, first LDAP sign-in → access request → grant), maker-checker, direct Checker change,
+  mock F5 failure at DR, scheduling rules, reject with comment, Admin rollback (v1.1 → v1.0 gives v1.2), Auditor and Read
+  limits, lockout and unlock, dashboard, audit events, append-only audit table, `audit.log`, logout. The UI was also checked
+  in the browser. The local `portal/.env` (git-ignored) was created from `.env.example` for this run.
+- Portal API tests are **not in the repo** yet; the 20-Nov end-to-end script was run from a scratch folder and could be added.
 - `static-portal/` has the same rules ported to TypeScript in `src/mock/`. `npm test` runs 85 checks (all passing on 12-Nov, Auditor included). It's tracked in the workspace repo.
 - **Code guide:** `portal/arch/` (10-Nov) documents the code; `arch/12-decisions-and-gaps.md` lists the gaps G1–G11 against the requirements. `portal/README.md` is behind the code (no Auditor).
 - **Git (12-Nov):** on GitHub, PR #1 merged `addn` into `dev` only up to `f4f72d5`; the department-dropdown commit `f37c6ad` is not on `dev`, and `main` is still `b679329`.
@@ -268,6 +289,20 @@ The local dev versions below are **actual**, not just planned:
 - **Groups:** no Bank list is needed; the Admin creates partitions in the portal.
 - **DNS form rules:** to be asked with the F5 API docs. **SIEM format:** to be asked.
 - **F5 API documentation request:** mailed. Still missing from it: ZoneRunner/standard records including PTR, sync-group behaviour, transactions, save-config, BIG-IQ vs BIG-IP, VELOS F5OS health, API user role, TLS, limits and version.
+
+## 10a. Lab BIG-IP (from `f5_api/SBI-api.txt`, 19-Nov-2026)
+
+A separate laptop (address 10.1.1.1) reaches a lab F5 at **10.1.1.5**. What its API answered:
+- **BIG-IP, not BIG-IQ:** BIG-IP Virtual Edition **21.1.0.1** (build 0.0.26), **trial** licence, standalone (no device
+  group, no BIG-IQ). The checks guide was written for 16.1, so compare against 21.1.
+- **The DNS (GTM) module is not provisioned** (`gtm=none`, only `ltm` on), although DNS is licensed. Until an admin
+  switches it on, every `/mgmt/tm/gtm/...` call fails.
+- Token login works (provider `tmos`, token lifetime **1200 s**). Basic auth is also on.
+- Partitions: `Common`, `Client_01`, `External_User`, `Internal_User` (the lab is shared with others).
+- ⚠ The file contains the lab **admin password** in plain text: never commit or mail it; change the password if the lab
+  is shared.
+- Lab questions (DNS module, shared partitions, API user, a second VE for sync, BIG-IQ, laptop tools) are in the
+  "Q Questions" folder of both sequence collections.
 
 ## 11. Decision log
 
@@ -299,6 +334,10 @@ The local dev versions below are **actual**, not just planned:
 | 13-Nov | **Status mail** drafted: progress, weekly plan, next steps; asks Starlight for the F5 API documentation, the record-management method and one unit-testing environment (test F5 GTM) to test the F5 API; asks SBI (once development is done) for a RHEL 9 test server and the prototype requirements. Attachments: requirements v1.0, proposal v2.1, SBOM (and optionally the timeline). Asks the recipient to approve the documents or say what to change |
 | 13-Nov | **Development timeline v1.0** (tentative): DB design 16-Nov → back end → front end → unit tests (to 2-Dec) → **F5 API setup needed by 2-Dec** → F5 integration 3–15 Dec → SIT 16–21 Dec → test-server deployment 22–23 Dec → working prototype **31-Dec-2026**. A late F5 setup moves steps 7–13 by the same delay |
 | 13-Nov | **SBOM rebuilt** with the real dev-build versions (see §13) |
+| 19-Nov | **Two F5 paths prepared, only one will be used:** BIG-IP direct (iControl REST `/mgmt/tm/...`) or through BIG-IQ (`/mgmt/cm/dns/working-config` + deploy task). If a BIG-IQ manages SBI's devices, the portal must go through BIG-IQ only; otherwise BIG-IP direct. Check any address with `GET /mgmt/shared/identified-devices/config/device-info` (`product`) |
+| 19-Nov | **Sync behaviour (user input, verbal, to confirm in writing):** a one-to-one record is changed on one device and syncs to the others; a one-to-many record must be configured at each site |
+| 20-Nov | **F5 API simulator** built as a separate project (`f5-simulator/`), for developing and testing the F5 integration without a real BIG-IP |
+| 20-Nov | `requiments.md`: backend corrected from "Python FastAPI" to **Java 21 + Spring Boot** |
 
 ## 12. Open points (Requirements v1.2 §16)
 
@@ -323,7 +362,8 @@ The local dev versions below are **actual**, not just planned:
 - **F1:** REST API documentation.
   - ⚠ **13-Nov finding, F5 article K14724629:** iControl REST does **not** support managing ZoneRunner (BIND), on any BIG-IP DNS version. If SBI's A/AAAA/PTR records live in ZoneRunner zones, the portal can't change them through REST. F5 must confirm the supported method (Wide IPs through the GTM API, DNS Express + zone transfer, or DNS dynamic update with TSIG). Asked in the 13-Nov mail.
   - The 5 my.f5.com K-articles in `f5_api/api_links.txt` do open (they load with JavaScript): K16153652 REST components by product, K45508216 REST table of contents, K14724629 ZoneRunner not supported, K000152849 VELOS interface state via F5OS-C API, K000092968 F5OS REST parameters from the CLI. `F5-API-Checks.md` Appendix C saying they couldn't be read is outdated.
-- **F2:** BIG-IQ CM or direct BIG-IP (iControl REST).
+- **F2:** BIG-IQ CM or direct BIG-IP (iControl REST). Deciding question: does SBI already manage these BIG-IP DNS devices with BIG-IQ? If yes, go through BIG-IQ (direct changes would leave BIG-IQ out of date); if not, BIG-IP direct.
+- **Sync behaviour (user input, 19-Nov, verbal, to confirm in writing):** a **one-to-one** record (one IP) is changed on **one** device and syncs to the others automatically; a **one-to-many** record (several IPs) must be configured on **each** site (DC, DR and AZ). Open: why multi-IP is per site (different IPs per site? site-local servers/pools?), which device takes single-IP changes, and how the portal confirms the sync reached DR and AZ.
 - **F3:** how partitions apply to DNS objects.
 - **F4:** reading live configuration (drift and sync).
 - **F5:** UAT BIG-IP VE and a least-privilege API account.
@@ -341,13 +381,15 @@ All 12 SBI queries and 12 F5 internal confirmations in the 29-Jul-2026 workbook 
 | Deliverable | Where | Status |
 |---|---|---|
 | SBOM (Bank format) | `mail 13 Nov 2026/SBI_SBOM_DNS_Portal.docx/.pdf` | **Rebuilt 13-Nov** (the 06-Nov real-version file was never saved; `analysis/sbom/` holds only the requirements-stage draft). 21 pages, 10 components with real dev-build versions: Portal 0.1.0, React 18.3.1, Spring Boot 3.4.1, Temurin 21.0.13+9, PostgreSQL 16.15, NGINX 1.27.5, Fluent Bit 3.1.9; Patroni, Vault/KMS, RHEL 9 planned. JAR SHA-256 `cc5b992a…b88`. Annex A = 76 back-end Java libraries with licences; Annex B = 10 front-end runtime packages. Release and EOL dates checked 13-Nov (Spring Boot 3.4 OSS support ended 31-Dec-2025, commercial ends 31-Dec-2026; NGINX 1.27 ended 24-Jun-2025; Fluent Bit 3.1 ended 12-Feb-2025; PostgreSQL 16.16 out 12-Nov-2026; Temurin 21 supported to 31-Dec-2029). Lists known CVEs (Spring Security CVE-2025-22228, Tomcat CVE-2025-24813, Logback CVE-2024-12798/12801, pgjdbc CVE-2025-49146, react-router-dom 6.28.0 advisories). **No full vulnerability scan yet; container image digests missing** (Docker didn't start) |
+| High-Level Design | `docs/F5-DNS-Portal-HLD-v1.0.docx/.pdf` | 23-Nov, v1.0, 25 pages. Follows Proposal v2.1 Figures 1–4 (redrawn; section 17 lists matches and updates; Appendix B reproduces the proposal figures). Deployment, logical layers, lifecycle, integrations, security, HA/DR failover sequence, RACI, decision register D1–D10. The internal `docs/…-v2.1` and the external v2.1 have byte-identical figures |
+| Low-Level Design | `docs/F5-DNS-Portal-LLD-v1.0.docx/.pdf` | 23-Nov, v1.0, 33 pages, 9 diagrams. Describes the built portal (from the code, 0.1.0, V1–V4) and the planned F5 integration design; cites the external Proposal v2.1 / Requirements v1.0; no Azalio. Draft for review |
 | Development timeline | `mail 13 Nov 2026/F5-DNS-Portal-Development-Timeline-v1.0` | 13-Nov, tentative, 16-Nov → 31-Dec-2026 (see decision log) |
 | Status mail | `mail 13 Nov 2026/mail-13-Nov-2026.html` | 13-Nov draft; the user's final text is in chat, the HTML still has the timeline section |
 | Security review | `analysis/07-portal-security-review.md` | 06-Nov, internal only; don't push it to a public repo |
 | LB prerequisites + queries | snapshot `analysis/starlight/F5/analysis/starlight/` | ⚠ **Stale:** written for v2.1's 1 node per site and no local VIP. v2.2 needs a local VIP and 2 nodes per site again |
 | Requirements Specification | `docs/…-v1.2` (internal) = `mail 13 Nov 2026/…-v1.0` (external) | Current; v0.1/v0.2 are internal only |
 | Proposal | `docs/…-v2.2` (internal) = `mail 13 Nov 2026/…-v2.1` (external, Azalio-free) | Baseline; see the document issues below |
-| F5 API request | `requiments.md` | Mailed (per 04-Nov notes); the local file still says FastAPI |
+| F5 API request | `requiments.md` | Mailed (per 04-Nov notes); local file corrected to Java/Spring Boot on 20-Nov |
 | Client questionnaire, UI inventory, open questions | snapshot `analysis/starlight/F5/analysis/01–05` | From 27–29 Oct; partly superseded by Requirements v1.0 |
 
 ## 14. Known document issues
@@ -368,8 +410,21 @@ Planning W1–W4 · Design W3–W7 (sign-off end W6) · Build/Integration W6–W
 
 - [ ] Send the 13-Nov status mail with the external Requirements v1.0, Proposal v2.1 and SBOM (and the timeline if wanted); follow up for approval of the documents.
 - [ ] Get from F5 (via Starlight): the API docs, the supported method for A/AAAA/PTR records (ZoneRunner is not REST-managed), and a test F5 GTM with a least-privilege API account by **2-Dec** (timeline dependency).
-- [ ] Fix "FastAPI" → Java/Spring Boot in `requiments.md`; chase F5 for the API docs and UAT BIG-IP VE.
-- [ ] Commit the uncommitted work: `portal/` (Auditor, V4, `arch/`) and the workspace (`context.md`, `static-portal/`, docs v1.1/v1.2, `f5_api/`, `analysis/sbom/`, `mail 13 Nov 2026/`, portal pointer). Keep `analysis/07-portal-security-review.md` out until the GitHub repo is known to be private.
+- [x] Fixed "FastAPI" → Java/Spring Boot in `requiments.md` (20-Nov).
+- [ ] Chase F5 for the API docs and UAT BIG-IP VE. `requiments.md` can now be sent.
+- [ ] **Lab:** get the DNS (GTM) module switched on, then have the lab team run the "Q Questions" folder of the BIG-IP
+  sequence collection and send back the Q.99 table. Change the lab admin password if `SBI-api.txt` was shared.
+- [ ] Get answers to the 4 deciding questions (§12: which F5 objects hold SBI's records; BIG-IQ or not; per-site IPs for
+  one-to-many; which device takes synced changes and how the sync is confirmed).
+- [ ] Build the F5 integration against `f5-simulator/` first (sync on/off and failure at one site), then the lab BIG-IP.
+- [ ] Add the 20-Nov end-to-end script to the portal repo as its first API test; give `f5-simulator/` a remote.
+- [ ] Departments screen for the Admin (decision 09-Nov; gap G1), which needs no outside input.
+- [x] Portal tested end to end on the Linux laptop, 55/55 (20-Nov).
+- [x] F5 API simulator built and tested (20-Nov).
+- [x] Postman collections and curl scripts for BIG-IP and BIG-IQ, with the lab questions (19–20 Nov).
+- [ ] Commit the uncommitted work in the workspace (`context.md`, `requiments.md`, `analysis/06…`, `f5_api/` except
+  `SBI-api.txt`, `docx/`, `mail 13 Nov 2026/`, portal pointer). The portal's Auditor/`arch/` work is committed
+  (`4772bb9`). Keep `analysis/07-portal-security-review.md` out until the GitHub repo is known to be private.
 - [ ] Update `portal/README.md` for the Auditor level and migrations V3–V4.
 - [ ] SBOM: add container image digests and a full vulnerability scan (Trivy / OWASP Dependency-Check) once Docker is running; note that HashiCorp Vault is **not open source** (Business Source License since Aug-2023; OpenBao is the MPL-2.0 open-source fork) if a dedicated Vault is chosen (B15).
 - [ ] F5 integration (handover §5–7): execution state machine, per-site idempotency, and `F5Provisioner` behind `F5_MODE`.

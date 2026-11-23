@@ -1,0 +1,2098 @@
+{
+  "info": {
+    "name": "F5 BIG-IQ DNS - Sequence (lab)",
+    "description": "Q. Questions: run folder 'A > Q Questions' after sign-in, then open Q.99 > Visualize and send the table back.\nThe same sequence as 'F5 BIG-IP DNS - Sequence', for when SBI manages the BIG-IP DNS devices through BIG-IQ.\nThe portal changes BIG-IQ's copy of the DNS configuration (working-config) and then DEPLOYS it to the BIG-IPs as a task.\nObjects are addressed by id (UUID) and linked by selfLink; the test scripts store them in variables.\nBIG-IQ access tokens last 5 minutes: the collection exchanges the 10-hour refresh token automatically.\nRequests marked [verify] use request bodies from the BIG-IQ API reference that are not yet tested on a lab BIG-IQ.\nSet baseUrl to the BIG-IQ address and 'password' (Current value). Turn off SSL verification for a lab certificate.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      {
+        "key": "key",
+        "value": "X-F5-Auth-Token",
+        "type": "string"
+      },
+      {
+        "key": "value",
+        "value": "{{token}}",
+        "type": "string"
+      },
+      {
+        "key": "in",
+        "value": "header",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// BIG-IQ: access token 5 min, refresh token 10 h. Exchange the refresh token when the access token is old.",
+          "const url = pm.request.url.toString();",
+          "if (url.includes(\"/mgmt/shared/authn/\")) { return; }",
+          "const now = Date.now();",
+          "if (pm.collectionVariables.get(\"token\") && now < Number(pm.collectionVariables.get(\"tokenExpiry\") || 0)) { return; }",
+          "const base = pm.collectionVariables.get(\"baseUrl\");",
+          "const store = (res) => {",
+          "    const b = res.json();",
+          "    pm.collectionVariables.set(\"token\", b.token.token);",
+          "    pm.collectionVariables.set(\"tokenExpiry\", String(Date.now() + 4 * 60 * 1000));",
+          "    if (b.refreshToken) {",
+          "        pm.collectionVariables.set(\"refreshToken\", b.refreshToken.token);",
+          "        pm.collectionVariables.set(\"refreshExpiry\", String(Date.now() + 9.5 * 3600 * 1000));",
+          "    }",
+          "};",
+          "const refresh = pm.collectionVariables.get(\"refreshToken\");",
+          "if (refresh && now < Number(pm.collectionVariables.get(\"refreshExpiry\") || 0)) {",
+          "    pm.sendRequest({ url: base + \"/mgmt/shared/authn/exchange\", method: \"POST\", header: { \"Content-Type\": \"application/json\" },",
+          "        body: { mode: \"raw\", raw: JSON.stringify({ refreshToken: { token: refresh } }) } },",
+          "        (err, res) => { if (!err && res.code === 200) { store(res); } else { console.error(\"BIG-IQ token exchange failed\", err || res.code); } });",
+          "    return;",
+          "}",
+          "const password = pm.collectionVariables.get(\"password\");",
+          "if (!password) { console.warn(\"Set the collection variable 'password' (Current value) first.\"); return; }",
+          "pm.sendRequest({ url: base + \"/mgmt/shared/authn/login\", method: \"POST\", header: { \"Content-Type\": \"application/json\" },",
+          "    body: { mode: \"raw\", raw: JSON.stringify({ username: pm.collectionVariables.get(\"username\"), password: password,",
+          "        loginProviderName: pm.collectionVariables.get(\"loginProvider\") || \"tmos\" }) } },",
+          "    (err, res) => { if (!err && res.code === 200) { store(res); } else { console.error(\"BIG-IQ login failed\", err || res.code); } });"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://<bigiq-address>",
+      "type": "string"
+    },
+    {
+      "key": "username",
+      "value": "admin",
+      "type": "string"
+    },
+    {
+      "key": "password",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "loginProvider",
+      "value": "tmos",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "tokenExpiry",
+      "value": "0",
+      "type": "string"
+    },
+    {
+      "key": "refreshToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refreshExpiry",
+      "value": "0",
+      "type": "string"
+    },
+    {
+      "key": "product",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "bigipLink",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "syncGroupLink",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "partition",
+      "value": "Common",
+      "type": "string"
+    },
+    {
+      "key": "datacenter",
+      "value": "DC_Lab",
+      "type": "string"
+    },
+    {
+      "key": "server",
+      "value": "srv_lab",
+      "type": "string"
+    },
+    {
+      "key": "serverIp",
+      "value": "10.1.20.10",
+      "type": "string"
+    },
+    {
+      "key": "vsIp",
+      "value": "10.1.20.11",
+      "type": "string"
+    },
+    {
+      "key": "pool",
+      "value": "pool_lab_a",
+      "type": "string"
+    },
+    {
+      "key": "wideip",
+      "value": "app.lab.example",
+      "type": "string"
+    },
+    {
+      "key": "dcId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "dcLink",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "serverId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "serverLink",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "vsId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "vsLink",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "poolId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "poolLink",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "memberId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "memberLink",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "wideipId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "wideipLink",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "deployId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "selfServiceId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "qa",
+      "value": "{}",
+      "type": "string"
+    },
+    {
+      "key": "qaManual",
+      "value": "[\"M1 Who owns this BIG-IQ, and may we create test DNS objects and deploy them to a lab BIG-IP?\", \"M2 Which BIG-IQ account and role should the portal use (e.g. DNS_Manager / DNS_Deployer)?\", \"M3 Which BIG-IPs may we deploy to (lab devices only), and which DNS sync group?\", \"M4 Are changes ever made directly on the BIG-IPs (outside BIG-IQ)? How are they re-imported?\", \"M5 Testing laptop: are Postman, curl and jq installed, and may files be copied to and from it?\", \"M6 Lab certificate: may certificate checks stay off, or is there a CA file to use?\", \"M7 SBI production: does BIG-IQ manage all BIG-IP DNS devices at DC, DR and AZ?\", \"M8 SBI production: for a domain with several IPs, are the IPs different at DC, DR and AZ?\", \"M9 SBI production: which BIG-IQ and BIG-IP versions?\"]",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "A Read-only sequence",
+      "item": [
+        {
+          "name": "01 Sign in",
+          "item": [
+            {
+              "name": "01.1 Login - access + refresh token",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/shared/authn/login",
+                "description": "BIG-IQ: the access token lasts 5 minutes, the refresh token 10 hours. Timeouts cannot be changed.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\",\n  \"loginProviderName\": \"{{loginProvider}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));",
+                      "let b = {}; try { b = pm.response.json(); } catch (e) {}",
+                      "try { const v = b.token.token; if (v) { pm.collectionVariables.set(\"token\", String(v)); } } catch (e) {}",
+                      "try { const v = b.refreshToken.token; if (v) { pm.collectionVariables.set(\"refreshToken\", String(v)); } } catch (e) {}",
+                      "pm.collectionVariables.set(\"tokenExpiry\", String(Date.now() + 4 * 60 * 1000));",
+                      "pm.collectionVariables.set(\"refreshExpiry\", String(Date.now() + 9.5 * 3600 * 1000));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "01.2 Exchange refresh token for a new access token",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/shared/authn/exchange",
+                "description": "Use this every few minutes instead of logging in again (the Postman collection does it automatically).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"refreshToken\": {\n    \"token\": \"{{refreshToken}}\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));",
+                      "let b = {}; try { b = pm.response.json(); } catch (e) {}",
+                      "try { const v = b.token.token; if (v) { pm.collectionVariables.set(\"token\", String(v)); } } catch (e) {}",
+                      "pm.collectionVariables.set(\"tokenExpiry\", String(Date.now() + 4 * 60 * 1000));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Q Questions - run and send back the answers",
+          "item": [
+            {
+              "name": "Q.00 Reset answers",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/shared/identified-devices/config/device-info?$select=product",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.collectionVariables.set(\"qa\", \"{}\");"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Q1 Is this a BIG-IQ, and which version?",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/shared/identified-devices/config/device-info",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const add = (q, a) => { const s = JSON.parse(pm.collectionVariables.get(\"qa\") || \"{}\"); s[q] = a; pm.collectionVariables.set(\"qa\", JSON.stringify(s)); console.log(q + \": \" + a); };",
+                      "let b = {}; try { b = pm.response.json(); } catch (e) {}",
+                      "const ok = pm.response.code >= 200 && pm.response.code < 300;",
+                      "const find = (o, key, out = []) => { if (o && typeof o === \"object\") { for (const [k, v] of Object.entries(o)) { if (k === key) out.push(v); find(v, key, out); } } return out; };",
+                      "if (!ok) { add(pm.info.requestName.split(\" \")[0], \"Not answered: HTTP \" + pm.response.code + \" \" + (b.message || \"\")); }",
+                      "if (ok) {",
+                      "add(\"Q1 Device and version\", b.product + \" \" + b.version + \" (build \" + b.build + \"), host \" + b.hostname + (b.product !== \"BIG-IQ\" ? \"  <-- NOT a BIG-IQ: use the BIG-IP collection\" : \"\"));",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Q2 Which BIG-IPs does this BIG-IQ manage?",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/shared/resolver/device-groups/cm-bigip-allBigIpDevices/devices?$select=hostname,address,product,version",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const add = (q, a) => { const s = JSON.parse(pm.collectionVariables.get(\"qa\") || \"{}\"); s[q] = a; pm.collectionVariables.set(\"qa\", JSON.stringify(s)); console.log(q + \": \" + a); };",
+                      "let b = {}; try { b = pm.response.json(); } catch (e) {}",
+                      "const ok = pm.response.code >= 200 && pm.response.code < 300;",
+                      "const find = (o, key, out = []) => { if (o && typeof o === \"object\") { for (const [k, v] of Object.entries(o)) { if (k === key) out.push(v); find(v, key, out); } } return out; };",
+                      "if (!ok) { add(pm.info.requestName.split(\" \")[0], \"Not answered: HTTP \" + pm.response.code + \" \" + (b.message || \"\")); }",
+                      "if (ok) {",
+                      "const d = (b.items || []).map(i => i.hostname + \" (\" + i.address + \", \" + i.version + \")\"); add(\"Q2 Managed BIG-IPs\", d.length + \": \" + d.join(\"; \"));",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Q3 Which BIG-IPs are managed for DNS?",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/shared/resolver/device-groups/cm-dns-allBigIpDevices/devices?$select=hostname,address,version",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const add = (q, a) => { const s = JSON.parse(pm.collectionVariables.get(\"qa\") || \"{}\"); s[q] = a; pm.collectionVariables.set(\"qa\", JSON.stringify(s)); console.log(q + \": \" + a); };",
+                      "let b = {}; try { b = pm.response.json(); } catch (e) {}",
+                      "const ok = pm.response.code >= 200 && pm.response.code < 300;",
+                      "const find = (o, key, out = []) => { if (o && typeof o === \"object\") { for (const [k, v] of Object.entries(o)) { if (k === key) out.push(v); find(v, key, out); } } return out; };",
+                      "if (!ok) { add(pm.info.requestName.split(\" \")[0], \"Not answered: HTTP \" + pm.response.code + \" \" + (b.message || \"\")); }",
+                      "if (ok) {",
+                      "const d = (b.items || []).map(i => i.hostname + \" (\" + i.address + \")\"); add(\"Q3 BIG-IPs managed for DNS\", d.length + \": \" + d.join(\"; \"));",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Q4 Which device groups exist (DNS sync groups)?",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/shared/resolver/device-groups?$select=groupName",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const add = (q, a) => { const s = JSON.parse(pm.collectionVariables.get(\"qa\") || \"{}\"); s[q] = a; pm.collectionVariables.set(\"qa\", JSON.stringify(s)); console.log(q + \": \" + a); };",
+                      "let b = {}; try { b = pm.response.json(); } catch (e) {}",
+                      "const ok = pm.response.code >= 200 && pm.response.code < 300;",
+                      "const find = (o, key, out = []) => { if (o && typeof o === \"object\") { for (const [k, v] of Object.entries(o)) { if (k === key) out.push(v); find(v, key, out); } } return out; };",
+                      "if (!ok) { add(pm.info.requestName.split(\" \")[0], \"Not answered: HTTP \" + pm.response.code + \" \" + (b.message || \"\")); }",
+                      "if (ok) {",
+                      "const g = (b.items || []).map(i => i.groupName).filter(n => !/^cm-/.test(n)); add(\"Q4 Non-system device groups\", g.join(\", \") || \"none\");",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Q5 Which DNS sync group do the data centers use?",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/cm/dns/working-config/datacenter?$select=name,deviceGroupReference",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const add = (q, a) => { const s = JSON.parse(pm.collectionVariables.get(\"qa\") || \"{}\"); s[q] = a; pm.collectionVariables.set(\"qa\", JSON.stringify(s)); console.log(q + \": \" + a); };",
+                      "let b = {}; try { b = pm.response.json(); } catch (e) {}",
+                      "const ok = pm.response.code >= 200 && pm.response.code < 300;",
+                      "const find = (o, key, out = []) => { if (o && typeof o === \"object\") { for (const [k, v] of Object.entries(o)) { if (k === key) out.push(v); find(v, key, out); } } return out; };",
+                      "if (!ok) { add(pm.info.requestName.split(\" \")[0], \"Not answered: HTTP \" + pm.response.code + \" \" + (b.message || \"\")); }",
+                      "if (ok) {",
+                      "const g = [...new Set((b.items || []).map(i => (i.deviceGroupReference || {}).name || (i.deviceGroupReference || {}).link).filter(Boolean))]; add(\"Q5 Data centers\", String((b.items || []).length)); add(\"Q5b DNS sync groups used\", g.join(\", \") || \"none\");",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Q6 How many A / AAAA Wide IPs does BIG-IQ hold?",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/cm/dns/working-config/wideip/a?$select=name,partition,poolReferences",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const add = (q, a) => { const s = JSON.parse(pm.collectionVariables.get(\"qa\") || \"{}\"); s[q] = a; pm.collectionVariables.set(\"qa\", JSON.stringify(s)); console.log(q + \": \" + a); };",
+                      "let b = {}; try { b = pm.response.json(); } catch (e) {}",
+                      "const ok = pm.response.code >= 200 && pm.response.code < 300;",
+                      "const find = (o, key, out = []) => { if (o && typeof o === \"object\") { for (const [k, v] of Object.entries(o)) { if (k === key) out.push(v); find(v, key, out); } } return out; };",
+                      "if (!ok) { add(pm.info.requestName.split(\" \")[0], \"Not answered: HTTP \" + pm.response.code + \" \" + (b.message || \"\")); }",
+                      "if (ok) {",
+                      "const w = b.items || []; add(\"Q6 A Wide IPs\", String(w.length)); add(\"Q6b Wide IPs with more than one pool\", String(w.filter(i => (i.poolReferences || []).length > 1).length));",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Q7 AAAA Wide IPs (IPv6)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/cm/dns/working-config/wideip/aaaa?$select=name",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const add = (q, a) => { const s = JSON.parse(pm.collectionVariables.get(\"qa\") || \"{}\"); s[q] = a; pm.collectionVariables.set(\"qa\", JSON.stringify(s)); console.log(q + \": \" + a); };",
+                      "let b = {}; try { b = pm.response.json(); } catch (e) {}",
+                      "const ok = pm.response.code >= 200 && pm.response.code < 300;",
+                      "const find = (o, key, out = []) => { if (o && typeof o === \"object\") { for (const [k, v] of Object.entries(o)) { if (k === key) out.push(v); find(v, key, out); } } return out; };",
+                      "if (!ok) { add(pm.info.requestName.split(\" \")[0], \"Not answered: HTTP \" + pm.response.code + \" \" + (b.message || \"\")); }",
+                      "if (ok) {",
+                      "add(\"Q7 AAAA Wide IPs\", String((b.items || []).length));",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Q8 How many A pools, and in which partitions?",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/cm/dns/working-config/pool/a?$select=name,partition",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const add = (q, a) => { const s = JSON.parse(pm.collectionVariables.get(\"qa\") || \"{}\"); s[q] = a; pm.collectionVariables.set(\"qa\", JSON.stringify(s)); console.log(q + \": \" + a); };",
+                      "let b = {}; try { b = pm.response.json(); } catch (e) {}",
+                      "const ok = pm.response.code >= 200 && pm.response.code < 300;",
+                      "const find = (o, key, out = []) => { if (o && typeof o === \"object\") { for (const [k, v] of Object.entries(o)) { if (k === key) out.push(v); find(v, key, out); } } return out; };",
+                      "if (!ok) { add(pm.info.requestName.split(\" \")[0], \"Not answered: HTTP \" + pm.response.code + \" \" + (b.message || \"\")); }",
+                      "if (ok) {",
+                      "const p = b.items || []; add(\"Q8 A pools\", p.length + \" in partitions: \" + [...new Set(p.map(i => i.partition))].join(\", \"));",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Q9 Recent DNS deployments: do they succeed?",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/cm/dns/tasks/deploy-configuration?$orderby=lastUpdateMicros+desc&$top=10&$select=name,status,errorMessage",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const add = (q, a) => { const s = JSON.parse(pm.collectionVariables.get(\"qa\") || \"{}\"); s[q] = a; pm.collectionVariables.set(\"qa\", JSON.stringify(s)); console.log(q + \": \" + a); };",
+                      "let b = {}; try { b = pm.response.json(); } catch (e) {}",
+                      "const ok = pm.response.code >= 200 && pm.response.code < 300;",
+                      "const find = (o, key, out = []) => { if (o && typeof o === \"object\") { for (const [k, v] of Object.entries(o)) { if (k === key) out.push(v); find(v, key, out); } } return out; };",
+                      "if (!ok) { add(pm.info.requestName.split(\" \")[0], \"Not answered: HTTP \" + pm.response.code + \" \" + (b.message || \"\")); }",
+                      "if (ok) {",
+                      "const t = b.items || []; add(\"Q9 Last 10 deployments\", t.map(i => i.status).join(\", \") || \"none\"); const e = t.find(i => i.errorMessage); if (e) { add(\"Q9b Last deployment error\", e.errorMessage); }",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Q10 Token: access and refresh lifetimes",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/shared/authz/tokens/{{token}}",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const add = (q, a) => { const s = JSON.parse(pm.collectionVariables.get(\"qa\") || \"{}\"); s[q] = a; pm.collectionVariables.set(\"qa\", JSON.stringify(s)); console.log(q + \": \" + a); };",
+                      "let b = {}; try { b = pm.response.json(); } catch (e) {}",
+                      "const ok = pm.response.code >= 200 && pm.response.code < 300;",
+                      "const find = (o, key, out = []) => { if (o && typeof o === \"object\") { for (const [k, v] of Object.entries(o)) { if (k === key) out.push(v); find(v, key, out); } } return out; };",
+                      "if (!ok) { add(pm.info.requestName.split(\" \")[0], \"Not answered: HTTP \" + pm.response.code + \" \" + (b.message || \"\")); }",
+                      "if (ok) {",
+                      "add(\"Q10 Access token timeout (s)\", String(b.timeout || \"fixed 300\"));",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Q.99 Show all answers (open the Visualize tab)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/shared/identified-devices/config/device-info?$select=product",
+                "description": "Shows every answer, and the questions to answer by hand, as one table. Copy it and send it back."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const s = JSON.parse(pm.collectionVariables.get(\"qa\") || \"{}\");",
+                      "const manual = JSON.parse(pm.collectionVariables.get(\"qaManual\") || \"[]\");",
+                      "const esc = (x) => String(x).replace(/[&<>]/g, (c) => ({ \"&\": \"&amp;\", \"<\": \"&lt;\", \">\": \"&gt;\" }[c]));",
+                      "let html = \"<h3>Answers from the API</h3><table border='1' cellpadding='4' style='border-collapse:collapse'><tr><th>Question</th><th>Answer</th></tr>\";",
+                      "for (const [q, a] of Object.entries(s)) { html += \"<tr><td>\" + esc(q) + \"</td><td>\" + esc(a) + \"</td></tr>\"; }",
+                      "html += \"</table><h3>Answer by hand</h3><table border='1' cellpadding='4' style='border-collapse:collapse'><tr><th>Question</th><th>Answer</th></tr>\";",
+                      "for (const q of manual) { html += \"<tr><td>\" + esc(q) + \"</td><td></td></tr>\"; }",
+                      "html += \"</table><p>Copy this page (or the console log) and send it back.</p>\";",
+                      "pm.visualizer.set(html);",
+                      "console.log(\"ALL ANSWERS\\n\" + JSON.stringify(s, null, 2));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "02 Identify device",
+          "item": [
+            {
+              "name": "02.1 BIG-IP or BIG-IQ (must say BIG-IQ)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/shared/identified-devices/config/device-info",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));",
+                      "let b = {}; try { b = pm.response.json(); } catch (e) {}",
+                      "try { const v = b.product; if (v) { pm.collectionVariables.set(\"product\", String(v)); } } catch (e) {}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "02.2 BIG-IQ software version",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/shared/identified-devices/config/device-info?$select=product,version,build,hostname",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "03 Managed BIG-IP devices",
+          "item": [
+            {
+              "name": "03.1 All managed BIG-IPs",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/shared/resolver/device-groups/cm-bigip-allBigIpDevices/devices?$select=uuid,hostname,address,product,version,selfLink",
+                "description": "Stores the first device's link in bigipLink; change it to the device you want to deploy to."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));",
+                      "let b = {}; try { b = pm.response.json(); } catch (e) {}",
+                      "try { const v = b.items && b.items[0] && b.items[0].selfLink; if (v) { pm.collectionVariables.set(\"bigipLink\", String(v)); } } catch (e) {}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "03.2 BIG-IPs with DNS managed by BIG-IQ",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/shared/resolver/device-groups/cm-dns-allBigIpDevices/devices?$select=uuid,hostname,address,version,selfLink",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "03.3 All device groups",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/shared/resolver/device-groups?$select=groupName,description,selfLink",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "04 DNS data in BIG-IQ (working-config)",
+          "item": [
+            {
+              "name": "04.1 Data centers",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/cm/dns/working-config/datacenter?$select=id,name,enabled,deviceGroupReference,selfLink",
+                "description": "Stores the DNS sync group link of the first data center in syncGroupLink (needed when creating objects)."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));",
+                      "let b = {}; try { b = pm.response.json(); } catch (e) {}",
+                      "try { const v = b.items && b.items[0] && b.items[0].deviceGroupReference && b.items[0].deviceGroupReference.link; if (v) { pm.collectionVariables.set(\"syncGroupLink\", String(v)); } } catch (e) {}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "04.2 Servers",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/cm/dns/working-config/server?$select=id,name,product,datacenterReference,selfLink",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "04.3 Listeners",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/cm/dns/working-config/listener",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "04.4 A pools",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/cm/dns/working-config/pool/a?$select=id,name,partition,loadBalancingMode,selfLink",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "04.5 AAAA pools",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/cm/dns/working-config/pool/aaaa?$select=id,name,partition,selfLink",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "04.6 A Wide IPs - all partitions",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/cm/dns/working-config/wideip/a?$select=id,name,partition,enabled,poolReferences,selfLink",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "04.7 AAAA Wide IPs",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/cm/dns/working-config/wideip/aaaa?$select=id,name,partition,enabled,selfLink",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "04.8 A Wide IPs - one partition",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/cm/dns/working-config/wideip/a?$filter=partition+eq+'{{partition}}'",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "04.9 A Wide IPs - paging, first 100",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/cm/dns/working-config/wideip/a?$top=100&$skip=0",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "04.10 Topology",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/cm/dns/working-config/topology",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "04.11 Regions",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/cm/dns/working-config/region",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "05 Deployments (history and status)",
+          "item": [
+            {
+              "name": "05.1 Recent DNS deployments",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/cm/dns/tasks/deploy-configuration?$orderby=lastUpdateMicros+desc&$top=10&$select=id,name,status,currentStep,errorMessage,startDateTime",
+                "description": "Deployment tasks: status FINISHED / FAILED, currentStep, errorMessage."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "05.2 Recent self-service tasks",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/cm/dns/tasks/self-service?$top=10",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "B Change and deploy sequence (LAB ONLY)",
+      "item": [
+        {
+          "name": "06 Create in BIG-IQ working-config (lab)",
+          "item": [
+            {
+              "name": "06.1 Create data center [verify]",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/cm/dns/working-config/datacenter",
+                "description": "\n\nVERIFY on a lab BIG-IQ: body fields taken from the API reference, not yet tested.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"{{datacenter}}\",\n  \"deviceGroupReference\": {\n    \"link\": \"{{syncGroupLink}}\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));",
+                      "let b = {}; try { b = pm.response.json(); } catch (e) {}",
+                      "try { const v = b.id; if (v) { pm.collectionVariables.set(\"dcId\", String(v)); } } catch (e) {}",
+                      "try { const v = b.selfLink; if (v) { pm.collectionVariables.set(\"dcLink\", String(v)); } } catch (e) {}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "06.2 Create server with one virtual server [verify]",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/cm/dns/working-config/server",
+                "description": "\n\nVERIFY on a lab BIG-IQ: body fields taken from the API reference, not yet tested.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"{{server}}\",\n  \"product\": \"generic-host\",\n  \"datacenterReference\": {\n    \"link\": \"{{dcLink}}\"\n  },\n  \"addresses\": [\n    {\n      \"name\": \"{{serverIp}}\"\n    }\n  ],\n  \"deviceGroupReference\": {\n    \"link\": \"{{syncGroupLink}}\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));",
+                      "let b = {}; try { b = pm.response.json(); } catch (e) {}",
+                      "try { const v = b.id; if (v) { pm.collectionVariables.set(\"serverId\", String(v)); } } catch (e) {}",
+                      "try { const v = b.selfLink; if (v) { pm.collectionVariables.set(\"serverLink\", String(v)); } } catch (e) {}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "06.3 Add virtual server to server [verify]",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/cm/dns/working-config/server/{{serverId}}/virtual-servers",
+                "description": "\n\nVERIFY on a lab BIG-IQ: body fields taken from the API reference, not yet tested.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"vs1\",\n  \"destination\": \"{{vsIp}}:80\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));",
+                      "let b = {}; try { b = pm.response.json(); } catch (e) {}",
+                      "try { const v = b.id; if (v) { pm.collectionVariables.set(\"vsId\", String(v)); } } catch (e) {}",
+                      "try { const v = b.selfLink; if (v) { pm.collectionVariables.set(\"vsLink\", String(v)); } } catch (e) {}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "06.4 Create A pool [verify]",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/cm/dns/working-config/pool/a",
+                "description": "\n\nVERIFY on a lab BIG-IQ: body fields taken from the API reference, not yet tested.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"{{pool}}\",\n  \"partition\": \"{{partition}}\",\n  \"loadBalancingMode\": \"round-robin\",\n  \"deviceGroupReference\": {\n    \"link\": \"{{syncGroupLink}}\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));",
+                      "let b = {}; try { b = pm.response.json(); } catch (e) {}",
+                      "try { const v = b.id; if (v) { pm.collectionVariables.set(\"poolId\", String(v)); } } catch (e) {}",
+                      "try { const v = b.selfLink; if (v) { pm.collectionVariables.set(\"poolLink\", String(v)); } } catch (e) {}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "06.5 Add pool member (virtual server) [verify]",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/cm/dns/working-config/pool/a/{{poolId}}/members",
+                "description": "\n\nVERIFY on a lab BIG-IQ: body fields taken from the API reference, not yet tested.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"vs1\",\n  \"serverReference\": {\n    \"link\": \"{{serverLink}}\"\n  },\n  \"enabled\": true,\n  \"deviceGroupReference\": {\n    \"link\": \"{{syncGroupLink}}\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));",
+                      "let b = {}; try { b = pm.response.json(); } catch (e) {}",
+                      "try { const v = b.id; if (v) { pm.collectionVariables.set(\"memberId\", String(v)); } } catch (e) {}",
+                      "try { const v = b.selfLink; if (v) { pm.collectionVariables.set(\"memberLink\", String(v)); } } catch (e) {}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "06.6 Create A Wide IP [verify]",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/cm/dns/working-config/wideip/a",
+                "description": "\n\nVERIFY on a lab BIG-IQ: body fields taken from the API reference, not yet tested.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"{{wideip}}\",\n  \"partition\": \"{{partition}}\",\n  \"enabled\": true,\n  \"poolReferences\": [\n    {\n      \"poolReference\": {\n        \"link\": \"{{poolLink}}\"\n      },\n      \"order\": 0,\n      \"ratio\": 1\n    }\n  ],\n  \"deviceGroupReference\": {\n    \"link\": \"{{syncGroupLink}}\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));",
+                      "let b = {}; try { b = pm.response.json(); } catch (e) {}",
+                      "try { const v = b.id; if (v) { pm.collectionVariables.set(\"wideipId\", String(v)); } } catch (e) {}",
+                      "try { const v = b.selfLink; if (v) { pm.collectionVariables.set(\"wideipLink\", String(v)); } } catch (e) {}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "06.7 Read back Wide IP",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/cm/dns/working-config/wideip/a/{{wideipId}}",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "07 Deploy to BIG-IP (evaluate, then deploy)",
+          "item": [
+            {
+              "name": "07.1 Evaluate only (no change on BIG-IP) [verify]",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/cm/dns/tasks/deploy-configuration",
+                "description": "Partial deployment of the Wide IP and its dependencies to the DNS sync group. skipDistribution=true stops after the difference is calculated.\n\nVERIFY on a lab BIG-IQ: body fields taken from the API reference, not yet tested.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"portal-{{wideip}}\",\n  \"skipDistribution\": true,\n  \"deviceGroupReferences\": [\n    {\n      \"link\": \"{{syncGroupLink}}\"\n    }\n  ],\n  \"objectsToDeployReferences\": [\n    {\n      \"link\": \"{{wideipLink}}\"\n    }\n  ],\n  \"properties\": {\n    \"DnsPropertiesBag\": {\n      \"dnsDistributeMode\": \"SYNC_GROUP\"\n    }\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));",
+                      "let b = {}; try { b = pm.response.json(); } catch (e) {}",
+                      "try { const v = b.id; if (v) { pm.collectionVariables.set(\"deployId\", String(v)); } } catch (e) {}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "07.2 Evaluation status and differences",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/cm/dns/tasks/deploy-configuration/{{deployId}}",
+                "description": "Poll until status is FINISHED (currentStep DISTRIBUTE_CONFIG when evaluated only)."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "07.3 Deploy the evaluated changes [verify]",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/cm/dns/tasks/deploy-configuration/{{deployId}}",
+                "description": "\n\nVERIFY on a lab BIG-IQ: body fields taken from the API reference, not yet tested.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"skipDistribution\": false,\n  \"status\": \"STARTED\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "07.4 Deployment status (poll until FINISHED / FAILED)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/cm/dns/tasks/deploy-configuration/{{deployId}}?$select=status,currentStep,errorMessage",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "08 Enable / disable (self-service)",
+          "item": [
+            {
+              "name": "08.1 Disable Wide IP on the BIG-IPs",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/cm/dns/tasks/self-service",
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"disable-{{wideip}}\",\n  \"resourceReference\": {\n    \"link\": \"{{wideipLink}}\"\n  },\n  \"operation\": \"disable\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));",
+                      "let b = {}; try { b = pm.response.json(); } catch (e) {}",
+                      "try { const v = b.id; if (v) { pm.collectionVariables.set(\"selfServiceId\", String(v)); } } catch (e) {}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "08.2 Self-service task status",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/cm/dns/tasks/self-service/{{selfServiceId}}",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "08.3 Enable Wide IP on the BIG-IPs",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/cm/dns/tasks/self-service",
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"enable-{{wideip}}\",\n  \"resourceReference\": {\n    \"link\": \"{{wideipLink}}\"\n  },\n  \"operation\": \"enable\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));",
+                      "let b = {}; try { b = pm.response.json(); } catch (e) {}",
+                      "try { const v = b.id; if (v) { pm.collectionVariables.set(\"selfServiceId\", String(v)); } } catch (e) {}"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "09 Modify and redeploy (lab)",
+          "item": [
+            {
+              "name": "09.1 Change pool load-balancing mode",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/cm/dns/working-config/pool/a/{{poolId}}",
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"loadBalancingMode\": \"global-availability\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "09.2 Deploy the change [verify]",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/cm/dns/tasks/deploy-configuration",
+                "description": "\n\nVERIFY on a lab BIG-IQ: body fields taken from the API reference, not yet tested.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"portal-modify-{{pool}}\",\n  \"deviceGroupReferences\": [\n    {\n      \"link\": \"{{syncGroupLink}}\"\n    }\n  ],\n  \"objectsToDeployReferences\": [\n    {\n      \"link\": \"{{poolLink}}\"\n    }\n  ],\n  \"properties\": {\n    \"DnsPropertiesBag\": {\n      \"dnsDistributeMode\": \"SYNC_GROUP\"\n    }\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));",
+                      "let b = {}; try { b = pm.response.json(); } catch (e) {}",
+                      "try { const v = b.id; if (v) { pm.collectionVariables.set(\"deployId\", String(v)); } } catch (e) {}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "09.3 Deployment status",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/cm/dns/tasks/deploy-configuration/{{deployId}}?$select=status,currentStep,errorMessage",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "10 Errors (expected)",
+          "item": [
+            {
+              "name": "10.1 Not found - 404",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/cm/dns/working-config/wideip/a/00000000-0000-0000-0000-000000000000",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 404 as expected\", () => pm.response.to.have.status(404));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "10.2 Wrong token - 401",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-F5-Auth-Token",
+                    "value": "invalid-token"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/shared/identified-devices/config/device-info",
+                "description": "",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 401 as expected\", () => pm.response.to.have.status(401));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "11 Clean up and deploy the removal (lab)",
+          "item": [
+            {
+              "name": "11.1 Delete Wide IP",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/cm/dns/working-config/wideip/a/{{wideipId}}",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "11.2 Delete pool",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/cm/dns/working-config/pool/a/{{poolId}}",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "11.3 Delete server",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/cm/dns/working-config/server/{{serverId}}",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "11.4 Delete data center",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/cm/dns/working-config/datacenter/{{dcId}}",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "11.5 Full deploy to remove them from the BIG-IPs [verify]",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/cm/dns/tasks/deploy-configuration",
+                "description": "Full (not partial) deployment: everything that differs from BIG-IQ is pushed. Evaluate first (skipDistribution) on a shared BIG-IQ.\n\nVERIFY on a lab BIG-IQ: body fields taken from the API reference, not yet tested.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"portal-cleanup\",\n  \"deviceGroupReferences\": [\n    {\n      \"link\": \"{{syncGroupLink}}\"\n    }\n  ],\n  \"properties\": {\n    \"DnsPropertiesBag\": {\n      \"dnsDistributeMode\": \"SYNC_GROUP\"\n    }\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));",
+                      "let b = {}; try { b = pm.response.json(); } catch (e) {}",
+                      "try { const v = b.id; if (v) { pm.collectionVariables.set(\"deployId\", String(v)); } } catch (e) {}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "11.6 Deployment status",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/cm/dns/tasks/deploy-configuration/{{deployId}}?$select=status,currentStep,errorMessage",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "C Sign out",
+      "item": [
+        {
+          "name": "12 Sign out",
+          "item": [
+            {
+              "name": "12.1 Logout - delete access token",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/shared/authz/tokens/{{token}}",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

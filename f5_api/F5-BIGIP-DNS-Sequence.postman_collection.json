@@ -1,0 +1,2779 @@
+{
+  "info": {
+    "name": "F5 BIG-IP DNS - Sequence (lab)",
+    "description": "Run top to bottom with the Collection Runner. Set the 'password' variable (Current value) once.\nQ. Questions: run folder 'A > Q Questions' after sign-in, then open Q.99 > Visualize and send the table back.\nA. Read-only sequence: sign in, identify, HA/sync, monitoring, partitions, all data.\nB. Change sequence (LAB ONLY): create, modify, transaction, errors, save, clean up.\nC. Sign out.  Z. Optional one-time steps: run by hand, not in the Runner.\nTurn off SSL certificate verification in Postman settings for the lab certificate.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      {
+        "key": "key",
+        "value": "X-F5-Auth-Token",
+        "type": "string"
+      },
+      {
+        "key": "value",
+        "value": "{{token}}",
+        "type": "string"
+      },
+      {
+        "key": "in",
+        "value": "header",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const url = pm.request.url.toString();",
+          "if (url.includes(\"/mgmt/shared/authn/login\")) { return; }",
+          "const token = pm.collectionVariables.get(\"token\");",
+          "if (token && Date.now() < Number(pm.collectionVariables.get(\"tokenExpiry\") || 0)) { return; }",
+          "const password = pm.collectionVariables.get(\"password\");",
+          "if (!password) { console.warn(\"Set the collection variable 'password' (Current value) first.\"); return; }",
+          "pm.sendRequest({",
+          "    url: pm.collectionVariables.get(\"baseUrl\") + \"/mgmt/shared/authn/login\",",
+          "    method: \"POST\", header: { \"Content-Type\": \"application/json\" },",
+          "    body: { mode: \"raw\", raw: JSON.stringify({ username: pm.collectionVariables.get(\"username\"),",
+          "        password: password, loginProviderName: pm.collectionVariables.get(\"loginProvider\") || \"tmos\" }) }",
+          "}, (err, res) => {",
+          "    if (err || res.code !== 200) { console.error(\"F5 auto-login failed\", err || res.code); return; }",
+          "    const t = res.json().token;",
+          "    pm.collectionVariables.set(\"token\", t.token);",
+          "    pm.collectionVariables.set(\"tokenExpiry\", String(Date.now() + (t.timeout - 60) * 1000));",
+          "});"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://10.1.1.5",
+      "type": "string"
+    },
+    {
+      "key": "username",
+      "value": "admin",
+      "type": "string"
+    },
+    {
+      "key": "password",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "loginProvider",
+      "value": "tmos",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "tokenExpiry",
+      "value": "0",
+      "type": "string"
+    },
+    {
+      "key": "transId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "product",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "partitions",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "partition",
+      "value": "Portal_Lab",
+      "type": "string"
+    },
+    {
+      "key": "datacenter",
+      "value": "DC_Lab",
+      "type": "string"
+    },
+    {
+      "key": "server",
+      "value": "srv_lab",
+      "type": "string"
+    },
+    {
+      "key": "serverIp",
+      "value": "10.1.20.10",
+      "type": "string"
+    },
+    {
+      "key": "vsIp",
+      "value": "10.1.20.11",
+      "type": "string"
+    },
+    {
+      "key": "vsIp2",
+      "value": "10.1.20.12",
+      "type": "string"
+    },
+    {
+      "key": "pool",
+      "value": "pool_lab_a",
+      "type": "string"
+    },
+    {
+      "key": "wideip",
+      "value": "app.lab.example",
+      "type": "string"
+    },
+    {
+      "key": "apiUser",
+      "value": "portal_api",
+      "type": "string"
+    },
+    {
+      "key": "apiUserPassword",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "qa",
+      "value": "{}",
+      "type": "string"
+    },
+    {
+      "key": "serverDc",
+      "value": "{}",
+      "type": "string"
+    },
+    {
+      "key": "qaManual",
+      "value": "[\"M1 Who owns this lab BIG-IP, and may we switch on the DNS (GTM) module (services restart for a few minutes)?\", \"M2 The lab is shared (other partitions exist): may we create partition Portal_Lab and test objects, and delete them afterwards?\", \"M3 May we create a separate API user for the portal, and with which role?\", \"M4 Can a second BIG-IP VE be added in a GTM sync group, to test sync between sites?\", \"M5 Is there (or can there be) a BIG-IQ in the lab?\", \"M6 Testing laptop: are Postman, curl and jq installed, and may files be copied to and from it?\", \"M7 Will the portal (Docker) run on this laptop, or does another machine need network access to the BIG-IP?\", \"M8 Lab certificate: may certificate checks stay off, or is there a CA file to use?\", \"M9 SBI production: which F5 objects hold the records (Wide IPs, ZoneRunner zone records, DNS Express)?\", \"M10 SBI production: is there a BIG-IQ managing the BIG-IP DNS devices (address and version)?\", \"M11 SBI production: for a domain with several IPs, are the IPs different at DC, DR and AZ?\", \"M12 SBI production: which device takes the changes that sync automatically, and how is the sync confirmed?\", \"M13 SBI production: which BIG-IP version runs at DC, DR and AZ?\"]",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "A Read-only sequence",
+      "item": [
+        {
+          "name": "01 Sign in",
+          "item": [
+            {
+              "name": "01.1 Login - get token",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/shared/authn/login",
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\",\n  \"loginProviderName\": \"{{loginProvider}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"login OK\", () => pm.response.to.have.status(200));",
+                      "const t = pm.response.json().token;",
+                      "pm.collectionVariables.set(\"token\", t.token);",
+                      "pm.collectionVariables.set(\"tokenExpiry\", String(Date.now() + (t.timeout - 60) * 1000));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "01.2 Check token",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/shared/authz/tokens/{{token}}",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "01.3 Extend token to 1 hour",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/shared/authz/tokens/{{token}}",
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"timeout\": 3600\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Q Questions - run and send back the answers",
+          "item": [
+            {
+              "name": "Q.00 Reset answers",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/shared/identified-devices/config/device-info?$select=product",
+                "description": "Clears earlier answers."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.collectionVariables.set(\"qa\", \"{}\");"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Q1 Is this a BIG-IP or a BIG-IQ, and which version?",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/shared/identified-devices/config/device-info",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const add = (q, a) => { const s = JSON.parse(pm.collectionVariables.get(\"qa\") || \"{}\"); s[q] = a; pm.collectionVariables.set(\"qa\", JSON.stringify(s)); console.log(q + \": \" + a); };",
+                      "let b = {}; try { b = pm.response.json(); } catch (e) {}",
+                      "const ok = pm.response.code >= 200 && pm.response.code < 300;",
+                      "const find = (o, key, out = []) => { if (o && typeof o === \"object\") { for (const [k, v] of Object.entries(o)) { if (k === key) out.push(v); find(v, key, out); } } return out; };",
+                      "if (!ok) { add(pm.info.requestName.split(\" \")[0], \"Not answered: HTTP \" + pm.response.code + \" \" + (b.message || \"\")); }",
+                      "if (ok) {",
+                      "add(\"Q1 Device and version\", b.product + \" \" + b.version + \" (build \" + b.build + \"), host \" + b.hostname);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Q2 Is the DNS (GTM) module switched on?",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/sys/provision?$select=name,level",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const add = (q, a) => { const s = JSON.parse(pm.collectionVariables.get(\"qa\") || \"{}\"); s[q] = a; pm.collectionVariables.set(\"qa\", JSON.stringify(s)); console.log(q + \": \" + a); };",
+                      "let b = {}; try { b = pm.response.json(); } catch (e) {}",
+                      "const ok = pm.response.code >= 200 && pm.response.code < 300;",
+                      "const find = (o, key, out = []) => { if (o && typeof o === \"object\") { for (const [k, v] of Object.entries(o)) { if (k === key) out.push(v); find(v, key, out); } } return out; };",
+                      "if (!ok) { add(pm.info.requestName.split(\" \")[0], \"Not answered: HTTP \" + pm.response.code + \" \" + (b.message || \"\")); }",
+                      "if (ok) {",
+                      "const g = (b.items || []).find(i => i.name === \"gtm\"); const on = (b.items || []).filter(i => i.level !== \"none\").map(i => i.name + \"=\" + i.level); add(\"Q2 DNS (GTM) module\", g ? (g.level === \"none\" ? \"OFF (gtm=none): GTM calls will fail\" : \"ON (gtm=\" + g.level + \")\") : \"gtm not found\"); add(\"Q2b Modules switched on\", on.join(\", \") || \"none\");",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Q3 Which partitions already exist (is the lab shared)?",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/auth/partition?$select=name",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const add = (q, a) => { const s = JSON.parse(pm.collectionVariables.get(\"qa\") || \"{}\"); s[q] = a; pm.collectionVariables.set(\"qa\", JSON.stringify(s)); console.log(q + \": \" + a); };",
+                      "let b = {}; try { b = pm.response.json(); } catch (e) {}",
+                      "const ok = pm.response.code >= 200 && pm.response.code < 300;",
+                      "const find = (o, key, out = []) => { if (o && typeof o === \"object\") { for (const [k, v] of Object.entries(o)) { if (k === key) out.push(v); find(v, key, out); } } return out; };",
+                      "if (!ok) { add(pm.info.requestName.split(\" \")[0], \"Not answered: HTTP \" + pm.response.code + \" \" + (b.message || \"\")); }",
+                      "if (ok) {",
+                      "const n = (b.items || []).map(i => i.name); add(\"Q3 Partitions\", n.length + \": \" + n.join(\", \"));",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Q4 Which account and role are we using?",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/auth/user/{{username}}",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const add = (q, a) => { const s = JSON.parse(pm.collectionVariables.get(\"qa\") || \"{}\"); s[q] = a; pm.collectionVariables.set(\"qa\", JSON.stringify(s)); console.log(q + \": \" + a); };",
+                      "let b = {}; try { b = pm.response.json(); } catch (e) {}",
+                      "const ok = pm.response.code >= 200 && pm.response.code < 300;",
+                      "const find = (o, key, out = []) => { if (o && typeof o === \"object\") { for (const [k, v] of Object.entries(o)) { if (k === key) out.push(v); find(v, key, out); } } return out; };",
+                      "if (!ok) { add(pm.info.requestName.split(\" \")[0], \"Not answered: HTTP \" + pm.response.code + \" \" + (b.message || \"\")); }",
+                      "if (ok) {",
+                      "const pa = (b.partitionAccess || []).map(p => p.name + \": \" + p.role).join(\", \"); add(\"Q4 Account and role\", (b.name || pm.collectionVariables.get(\"username\")) + \" - \" + (pa || \"unknown\"));",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Q5 How many devices, and are they clustered?",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/cm/device?$select=name,managementIp,failoverState,version",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const add = (q, a) => { const s = JSON.parse(pm.collectionVariables.get(\"qa\") || \"{}\"); s[q] = a; pm.collectionVariables.set(\"qa\", JSON.stringify(s)); console.log(q + \": \" + a); };",
+                      "let b = {}; try { b = pm.response.json(); } catch (e) {}",
+                      "const ok = pm.response.code >= 200 && pm.response.code < 300;",
+                      "const find = (o, key, out = []) => { if (o && typeof o === \"object\") { for (const [k, v] of Object.entries(o)) { if (k === key) out.push(v); find(v, key, out); } } return out; };",
+                      "if (!ok) { add(pm.info.requestName.split(\" \")[0], \"Not answered: HTTP \" + pm.response.code + \" \" + (b.message || \"\")); }",
+                      "if (ok) {",
+                      "const d = (b.items || []).map(i => i.name + \" (\" + i.managementIp + \", \" + i.failoverState + \", \" + i.version + \")\"); add(\"Q5 Devices in trust\", d.length + \": \" + d.join(\"; \"));",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Q6 Config sync status",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/cm/sync-status",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const add = (q, a) => { const s = JSON.parse(pm.collectionVariables.get(\"qa\") || \"{}\"); s[q] = a; pm.collectionVariables.set(\"qa\", JSON.stringify(s)); console.log(q + \": \" + a); };",
+                      "let b = {}; try { b = pm.response.json(); } catch (e) {}",
+                      "const ok = pm.response.code >= 200 && pm.response.code < 300;",
+                      "const find = (o, key, out = []) => { if (o && typeof o === \"object\") { for (const [k, v] of Object.entries(o)) { if (k === key) out.push(v); find(v, key, out); } } return out; };",
+                      "if (!ok) { add(pm.info.requestName.split(\" \")[0], \"Not answered: HTTP \" + pm.response.code + \" \" + (b.message || \"\")); }",
+                      "if (ok) {",
+                      "const st = find(b, \"status\").map(x => x.description).filter(Boolean)[0]; const c = find(b, \"color\").map(x => x.description)[0]; add(\"Q6 Sync status\", (st || \"?\") + \" (\" + (c || \"?\") + \")\");",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Q7 Is GTM sync on, and which sync group?",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/gtm/global-settings/general?$select=synchronization,synchronizationGroupName,synchronizeZoneFiles",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const add = (q, a) => { const s = JSON.parse(pm.collectionVariables.get(\"qa\") || \"{}\"); s[q] = a; pm.collectionVariables.set(\"qa\", JSON.stringify(s)); console.log(q + \": \" + a); };",
+                      "let b = {}; try { b = pm.response.json(); } catch (e) {}",
+                      "const ok = pm.response.code >= 200 && pm.response.code < 300;",
+                      "const find = (o, key, out = []) => { if (o && typeof o === \"object\") { for (const [k, v] of Object.entries(o)) { if (k === key) out.push(v); find(v, key, out); } } return out; };",
+                      "if (!ok) { add(pm.info.requestName.split(\" \")[0], \"Not answered: HTTP \" + pm.response.code + \" \" + (b.message || \"\")); }",
+                      "if (ok) {",
+                      "add(\"Q7 GTM sync\", \"synchronization=\" + b.synchronization + \", group=\" + b.synchronizationGroupName + \", zone files=\" + b.synchronizeZoneFiles);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Q8 Which data centers and servers exist (other sites)?",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/gtm/server?$select=name,datacenter,product,addresses",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const add = (q, a) => { const s = JSON.parse(pm.collectionVariables.get(\"qa\") || \"{}\"); s[q] = a; pm.collectionVariables.set(\"qa\", JSON.stringify(s)); console.log(q + \": \" + a); };",
+                      "let b = {}; try { b = pm.response.json(); } catch (e) {}",
+                      "const ok = pm.response.code >= 200 && pm.response.code < 300;",
+                      "const find = (o, key, out = []) => { if (o && typeof o === \"object\") { for (const [k, v] of Object.entries(o)) { if (k === key) out.push(v); find(v, key, out); } } return out; };",
+                      "if (!ok) { add(pm.info.requestName.split(\" \")[0], \"Not answered: HTTP \" + pm.response.code + \" \" + (b.message || \"\")); }",
+                      "if (ok) {",
+                      "const map = {}; (b.items || []).forEach(i => map[i.name] = i.datacenter); pm.collectionVariables.set(\"serverDc\", JSON.stringify(map)); const dcs = [...new Set(Object.values(map))]; add(\"Q8 GTM servers / data centers\", (b.items || []).length + \" servers in \" + dcs.length + \" data centers: \" + dcs.join(\", \"));",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Q9 Which record objects are used: Wide IPs or DNS Express zones?",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/gtm/wideip/a?$select=name,partition,pools",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const add = (q, a) => { const s = JSON.parse(pm.collectionVariables.get(\"qa\") || \"{}\"); s[q] = a; pm.collectionVariables.set(\"qa\", JSON.stringify(s)); console.log(q + \": \" + a); };",
+                      "let b = {}; try { b = pm.response.json(); } catch (e) {}",
+                      "const ok = pm.response.code >= 200 && pm.response.code < 300;",
+                      "const find = (o, key, out = []) => { if (o && typeof o === \"object\") { for (const [k, v] of Object.entries(o)) { if (k === key) out.push(v); find(v, key, out); } } return out; };",
+                      "if (!ok) { add(pm.info.requestName.split(\" \")[0], \"Not answered: HTTP \" + pm.response.code + \" \" + (b.message || \"\")); }",
+                      "if (ok) {",
+                      "const w = b.items || []; add(\"Q9a A Wide IPs\", w.length + (w.length ? \" (e.g. \" + w.slice(0, 3).map(i => \"/\" + i.partition + \"/\" + i.name).join(\", \") + \")\" : \"\")); const multi = w.filter(i => (i.pools || []).length > 1).length; add(\"Q9b Wide IPs with more than one pool\", String(multi));",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Q10 AAAA Wide IPs (IPv6)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/gtm/wideip/aaaa?$select=name,partition",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const add = (q, a) => { const s = JSON.parse(pm.collectionVariables.get(\"qa\") || \"{}\"); s[q] = a; pm.collectionVariables.set(\"qa\", JSON.stringify(s)); console.log(q + \": \" + a); };",
+                      "let b = {}; try { b = pm.response.json(); } catch (e) {}",
+                      "const ok = pm.response.code >= 200 && pm.response.code < 300;",
+                      "const find = (o, key, out = []) => { if (o && typeof o === \"object\") { for (const [k, v] of Object.entries(o)) { if (k === key) out.push(v); find(v, key, out); } } return out; };",
+                      "if (!ok) { add(pm.info.requestName.split(\" \")[0], \"Not answered: HTTP \" + pm.response.code + \" \" + (b.message || \"\")); }",
+                      "if (ok) {",
+                      "add(\"Q10 AAAA Wide IPs\", String((b.items || []).length));",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Q11 DNS Express zones",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/ltm/dns/zone?$select=name,dnsExpressServer",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const add = (q, a) => { const s = JSON.parse(pm.collectionVariables.get(\"qa\") || \"{}\"); s[q] = a; pm.collectionVariables.set(\"qa\", JSON.stringify(s)); console.log(q + \": \" + a); };",
+                      "let b = {}; try { b = pm.response.json(); } catch (e) {}",
+                      "const ok = pm.response.code >= 200 && pm.response.code < 300;",
+                      "const find = (o, key, out = []) => { if (o && typeof o === \"object\") { for (const [k, v] of Object.entries(o)) { if (k === key) out.push(v); find(v, key, out); } } return out; };",
+                      "if (!ok) { add(pm.info.requestName.split(\" \")[0], \"Not answered: HTTP \" + pm.response.code + \" \" + (b.message || \"\")); }",
+                      "if (ok) {",
+                      "const z = (b.items || []).map(i => i.name); add(\"Q11 DNS Express zones\", z.length + (z.length ? \": \" + z.slice(0, 5).join(\", \") : \"\"));",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Q12 Do DNS profiles use local BIND (ZoneRunner)?",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/ltm/profile/dns?$select=name,useLocalBind,enableDnsExpress,enableGtm",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const add = (q, a) => { const s = JSON.parse(pm.collectionVariables.get(\"qa\") || \"{}\"); s[q] = a; pm.collectionVariables.set(\"qa\", JSON.stringify(s)); console.log(q + \": \" + a); };",
+                      "let b = {}; try { b = pm.response.json(); } catch (e) {}",
+                      "const ok = pm.response.code >= 200 && pm.response.code < 300;",
+                      "const find = (o, key, out = []) => { if (o && typeof o === \"object\") { for (const [k, v] of Object.entries(o)) { if (k === key) out.push(v); find(v, key, out); } } return out; };",
+                      "if (!ok) { add(pm.info.requestName.split(\" \")[0], \"Not answered: HTTP \" + pm.response.code + \" \" + (b.message || \"\")); }",
+                      "if (ok) {",
+                      "const p = (b.items || []).map(i => i.name + \": localBind=\" + i.useLocalBind + \", dnsExpress=\" + i.enableDnsExpress + \", gtm=\" + i.enableGtm); add(\"Q12 DNS profiles\", p.join(\"; \") || \"none\");",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Q13 For several IPs: are pool members in different data centers?",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/gtm/pool/a?expandSubcollections=true&$select=name,partition,membersReference",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const add = (q, a) => { const s = JSON.parse(pm.collectionVariables.get(\"qa\") || \"{}\"); s[q] = a; pm.collectionVariables.set(\"qa\", JSON.stringify(s)); console.log(q + \": \" + a); };",
+                      "let b = {}; try { b = pm.response.json(); } catch (e) {}",
+                      "const ok = pm.response.code >= 200 && pm.response.code < 300;",
+                      "const find = (o, key, out = []) => { if (o && typeof o === \"object\") { for (const [k, v] of Object.entries(o)) { if (k === key) out.push(v); find(v, key, out); } } return out; };",
+                      "if (!ok) { add(pm.info.requestName.split(\" \")[0], \"Not answered: HTTP \" + pm.response.code + \" \" + (b.message || \"\")); }",
+                      "if (ok) {",
+                      "const dc = JSON.parse(pm.collectionVariables.get(\"serverDc\") || \"{}\"); const pools = b.items || []; const rows = pools.map(p => { const m = ((p.membersReference || {}).items || []).map(x => x.name.split(\":\")[0]); const d = [...new Set(m.map(s => dc[s] || dc[s.replace(/^\\/Common\\//, \"\")] || \"?\"))]; return { name: p.name, members: m.length, dcs: d }; }); add(\"Q13a A pools\", String(rows.length)); add(\"Q13b Pools with members in more than one data center\", String(rows.filter(x => x.dcs.length > 1).length)); add(\"Q13c Pools with more than one member\", String(rows.filter(x => x.members > 1).length));",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Q14 Management TLS and Basic auth settings",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/sys/httpd?$select=sslProtocol,authPamIdleTimeout,maxClients",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const add = (q, a) => { const s = JSON.parse(pm.collectionVariables.get(\"qa\") || \"{}\"); s[q] = a; pm.collectionVariables.set(\"qa\", JSON.stringify(s)); console.log(q + \": \" + a); };",
+                      "let b = {}; try { b = pm.response.json(); } catch (e) {}",
+                      "const ok = pm.response.code >= 200 && pm.response.code < 300;",
+                      "const find = (o, key, out = []) => { if (o && typeof o === \"object\") { for (const [k, v] of Object.entries(o)) { if (k === key) out.push(v); find(v, key, out); } } return out; };",
+                      "if (!ok) { add(pm.info.requestName.split(\" \")[0], \"Not answered: HTTP \" + pm.response.code + \" \" + (b.message || \"\")); }",
+                      "if (ok) {",
+                      "add(\"Q14 Management TLS\", String(b.sslProtocol));",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Q15 Licence: registration and dates",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/sys/license",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const add = (q, a) => { const s = JSON.parse(pm.collectionVariables.get(\"qa\") || \"{}\"); s[q] = a; pm.collectionVariables.set(\"qa\", JSON.stringify(s)); console.log(q + \": \" + a); };",
+                      "let b = {}; try { b = pm.response.json(); } catch (e) {}",
+                      "const ok = pm.response.code >= 200 && pm.response.code < 300;",
+                      "const find = (o, key, out = []) => { if (o && typeof o === \"object\") { for (const [k, v] of Object.entries(o)) { if (k === key) out.push(v); find(v, key, out); } } return out; };",
+                      "if (!ok) { add(pm.info.requestName.split(\" \")[0], \"Not answered: HTTP \" + pm.response.code + \" \" + (b.message || \"\")); }",
+                      "if (ok) {",
+                      "const k = (n) => find(b, n).map(x => x.description || x)[0]; add(\"Q15 Licence\", \"end=\" + (k(\"licenseEndDate\") || \"?\") + \", service check=\" + (k(\"serviceCheckDate\") || \"?\") + \", key=\" + (k(\"registrationKey\") || \"?\"));",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Q16 Token lifetime (for the portal sign-in)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/shared/authz/tokens/{{token}}",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const add = (q, a) => { const s = JSON.parse(pm.collectionVariables.get(\"qa\") || \"{}\"); s[q] = a; pm.collectionVariables.set(\"qa\", JSON.stringify(s)); console.log(q + \": \" + a); };",
+                      "let b = {}; try { b = pm.response.json(); } catch (e) {}",
+                      "const ok = pm.response.code >= 200 && pm.response.code < 300;",
+                      "const find = (o, key, out = []) => { if (o && typeof o === \"object\") { for (const [k, v] of Object.entries(o)) { if (k === key) out.push(v); find(v, key, out); } } return out; };",
+                      "if (!ok) { add(pm.info.requestName.split(\" \")[0], \"Not answered: HTTP \" + pm.response.code + \" \" + (b.message || \"\")); }",
+                      "if (ok) {",
+                      "add(\"Q16 Token timeout (s)\", String(b.timeout));",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Q.99 Show all answers (open the Visualize tab)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/shared/identified-devices/config/device-info?$select=product",
+                "description": "Shows every answer, and the questions to answer by hand, as one table. Copy it and send it back."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const s = JSON.parse(pm.collectionVariables.get(\"qa\") || \"{}\");",
+                      "const manual = JSON.parse(pm.collectionVariables.get(\"qaManual\") || \"[]\");",
+                      "const esc = (x) => String(x).replace(/[&<>]/g, (c) => ({ \"&\": \"&amp;\", \"<\": \"&lt;\", \">\": \"&gt;\" }[c]));",
+                      "let html = \"<h3>Answers from the API</h3><table border='1' cellpadding='4' style='border-collapse:collapse'><tr><th>Question</th><th>Answer</th></tr>\";",
+                      "for (const [q, a] of Object.entries(s)) { html += \"<tr><td>\" + esc(q) + \"</td><td>\" + esc(a) + \"</td></tr>\"; }",
+                      "html += \"</table><h3>Answer by hand</h3><table border='1' cellpadding='4' style='border-collapse:collapse'><tr><th>Question</th><th>Answer</th></tr>\";",
+                      "for (const q of manual) { html += \"<tr><td>\" + esc(q) + \"</td><td></td></tr>\"; }",
+                      "html += \"</table><p>Copy this page (or the console log) and send it back.</p>\";",
+                      "pm.visualizer.set(html);",
+                      "console.log(\"ALL ANSWERS\\n\" + JSON.stringify(s, null, 2));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "02 Identify device",
+          "item": [
+            {
+              "name": "02.1 BIG-IP or BIG-IQ",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/shared/identified-devices/config/device-info",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));",
+                      "const d = pm.response.json();",
+                      "pm.collectionVariables.set(\"product\", d.product);",
+                      "console.log(\"Device is \" + d.product + \" \" + d.version);"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "02.2 Software version",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/sys/version",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "02.3 Provisioned modules (gtm must be on)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/sys/provision?$select=name,level",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));",
+                      "const gtm = pm.response.json().items.find(i => i.name === \"gtm\");",
+                      "pm.test(\"DNS (GTM) module provisioned\", () => pm.expect(gtm && gtm.level).to.not.equal(\"none\"));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "02.4 Hostname",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/sys/global-settings?$select=hostname",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "03 HA and sync",
+          "item": [
+            {
+              "name": "03.1 Failover state",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/sys/failover",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "03.2 Devices",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/cm/device?$select=name,managementIp,failoverState,version",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "03.3 Sync status",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/cm/sync-status",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "03.4 Device groups",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/cm/device-group?$select=name,type,devices",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "03.5 GTM sync group",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/gtm/global-settings/general?$select=synchronization,synchronizationGroupName",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "04 Monitoring",
+          "item": [
+            {
+              "name": "04.1 CPU and memory",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/sys/host-info",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "04.2 Data center status",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/gtm/datacenter/stats",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "04.3 Server status",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/gtm/server/stats",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "04.4 A pool status",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/gtm/pool/a/stats",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "04.5 A Wide IP status and requests",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/gtm/wideip/a/stats",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "05 Partitions",
+          "item": [
+            {
+              "name": "05.1 List partitions",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/auth/partition?$select=name,description",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));",
+                      "const names = pm.response.json().items.map(i => i.name);",
+                      "pm.collectionVariables.set(\"partitions\", names.join(\",\"));",
+                      "console.log(\"Partitions: \" + names.join(\", \"));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "05.2 Folders",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/sys/folder?$select=name,fullPath",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "06 All data (global)",
+          "item": [
+            {
+              "name": "06.1 Data centers",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/gtm/datacenter?$select=name,location,enabled",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "06.2 Servers",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/gtm/server?$select=name,datacenter,product,addresses",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "06.3 Servers with virtual servers",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/gtm/server?expandSubcollections=true",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "06.4 Listeners",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/gtm/listener",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "06.5 Monitors",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/gtm/monitor",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "06.6 Topology",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/gtm/topology",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "06.7 Regions",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/gtm/region",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "07 All data (every partition)",
+          "item": [
+            {
+              "name": "07.1 A Wide IPs - all partitions",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/gtm/wideip/a?$select=name,partition,pools,enabled",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "07.2 AAAA Wide IPs - all partitions",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/gtm/wideip/aaaa?$select=name,partition,pools,enabled",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "07.3 A pools with members - all partitions",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/gtm/pool/a?expandSubcollections=true",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "07.4 AAAA pools with members - all partitions",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/gtm/pool/aaaa?expandSubcollections=true",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "07.5 A Wide IPs - one partition",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/gtm/wideip/a?$filter=partition+eq+{{partition}}",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "07.6 A pools - one partition",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/gtm/pool/a?$filter=partition+eq+{{partition}}&expandSubcollections=true",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "07.7 A Wide IPs - paging, first 100",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/gtm/wideip/a?$top=100&$skip=0",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "07.8 DNS Express zones",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/ltm/dns/zone",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "07.9 DNS nameservers",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/ltm/dns/nameserver",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "B Change sequence (LAB ONLY)",
+      "item": [
+        {
+          "name": "08 Create test objects (lab)",
+          "item": [
+            {
+              "name": "08.1 Create partition",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/auth/partition",
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"{{partition}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"created (200) or already there (409)\", () => pm.expect([200, 409]).to.include(pm.response.code));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "08.2 Create data center",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/gtm/datacenter",
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"{{datacenter}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"created (200) or already there (409)\", () => pm.expect([200, 409]).to.include(pm.response.code));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "08.3 Create server with 2 virtual servers",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/gtm/server",
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"{{server}}\",\n  \"datacenter\": \"/Common/{{datacenter}}\",\n  \"product\": \"generic-host\",\n  \"addresses\": [\n    {\n      \"name\": \"{{serverIp}}\"\n    }\n  ],\n  \"virtualServers\": [\n    {\n      \"name\": \"vs1\",\n      \"destination\": \"{{vsIp}}:80\"\n    },\n    {\n      \"name\": \"vs2\",\n      \"destination\": \"{{vsIp2}}:80\"\n    }\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"created (200) or already there (409)\", () => pm.expect([200, 409]).to.include(pm.response.code));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "08.4 Create A pool (one IP = one-to-one)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/gtm/pool/a",
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"{{pool}}\",\n  \"partition\": \"{{partition}}\",\n  \"loadBalancingMode\": \"round-robin\",\n  \"members\": [\n    {\n      \"name\": \"{{server}}:vs1\",\n      \"partition\": \"Common\"\n    }\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"created (200) or already there (409)\", () => pm.expect([200, 409]).to.include(pm.response.code));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "08.5 Create A Wide IP",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/gtm/wideip/a",
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"{{wideip}}\",\n  \"partition\": \"{{partition}}\",\n  \"pools\": [\n    {\n      \"name\": \"{{pool}}\",\n      \"partition\": \"{{partition}}\"\n    }\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"created (200) or already there (409)\", () => pm.expect([200, 409]).to.include(pm.response.code));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "08.6 Read back Wide IP",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/gtm/wideip/a/~{{partition}}~{{wideip}}",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "09 Modify (lab)",
+          "item": [
+            {
+              "name": "09.1 Add second IP (one-to-many)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/gtm/pool/a/~{{partition}}~{{pool}}/members",
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"{{server}}:vs2\",\n  \"partition\": \"Common\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"created (200) or already there (409)\", () => pm.expect([200, 409]).to.include(pm.response.code));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "09.2 Change load-balancing mode",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/gtm/pool/a/~{{partition}}~{{pool}}",
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"loadBalancingMode\": \"global-availability\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "09.3 Disable Wide IP",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/gtm/wideip/a/~{{partition}}~{{wideip}}",
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"disabled\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "09.4 Enable Wide IP",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/gtm/wideip/a/~{{partition}}~{{wideip}}",
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"enabled\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "09.5 Read back pool with members",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/gtm/pool/a/~{{partition}}~{{pool}}?expandSubcollections=true",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "09.6 Remove second IP",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/gtm/pool/a/~{{partition}}~{{pool}}/members/~Common~{{server}}:vs2",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "10 Transaction (lab)",
+          "item": [
+            {
+              "name": "10.1 Create transaction",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/transaction",
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));",
+                      "pm.collectionVariables.set(\"transId\", String(pm.response.json().transId));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "10.2 Queue: create Wide IP",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-F5-REST-Coordination-Id",
+                    "value": "{{transId}}"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/gtm/wideip/a",
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"tx.{{wideip}}\",\n  \"partition\": \"{{partition}}\",\n  \"pools\": [\n    {\n      \"name\": \"{{pool}}\",\n      \"partition\": \"{{partition}}\"\n    }\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "10.3 Queued commands",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/transaction/{{transId}}/commands",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "10.4 Commit",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/transaction/{{transId}}",
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"state\": \"VALIDATING\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "10.5 Transaction status",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/transaction/{{transId}}",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "11 Errors (expected)",
+          "item": [
+            {
+              "name": "11.1 Not found - 404",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/gtm/wideip/a/~Common~does.not.exist.lab",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 404 as expected\", () => pm.response.to.have.status(404));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "11.2 Duplicate - 409",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/gtm/datacenter",
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"{{datacenter}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 409 as expected\", () => pm.response.to.have.status(409));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "11.3 Wrong token - 401",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-F5-Auth-Token",
+                    "value": "invalid-token"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/sys/version",
+                "description": "",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 401 as expected\", () => pm.response.to.have.status(401));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "12 Save, sync, clean up (lab)",
+          "item": [
+            {
+              "name": "12.1 Save configuration",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/sys/config",
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"command\": \"save\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "12.2 Sync status",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/cm/sync-status",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "12.3 Delete transaction Wide IP",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/gtm/wideip/a/~{{partition}}~tx.{{wideip}}",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"deleted (200) or not there (404)\", () => pm.expect([200, 404]).to.include(pm.response.code));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "12.4 Delete Wide IP",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/gtm/wideip/a/~{{partition}}~{{wideip}}",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"deleted (200) or not there (404)\", () => pm.expect([200, 404]).to.include(pm.response.code));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "12.5 Delete pool",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/gtm/pool/a/~{{partition}}~{{pool}}",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"deleted (200) or not there (404)\", () => pm.expect([200, 404]).to.include(pm.response.code));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "12.6 Delete server",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/gtm/server/~Common~{{server}}",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"deleted (200) or not there (404)\", () => pm.expect([200, 404]).to.include(pm.response.code));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "12.7 Delete data center",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/gtm/datacenter/~Common~{{datacenter}}",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"deleted (200) or not there (404)\", () => pm.expect([200, 404]).to.include(pm.response.code));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "12.8 Delete partition",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/auth/partition/{{partition}}",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"deleted (200) or not there (404)\", () => pm.expect([200, 404]).to.include(pm.response.code));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "C Sign out",
+      "item": [
+        {
+          "name": "13 Sign out",
+          "item": [
+            {
+              "name": "13.1 Logout - delete token",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/shared/authz/tokens/{{token}}",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Z Optional one-time (run by hand)",
+      "item": [
+        {
+          "name": "Z1 Provision DNS (GTM) - lab, once",
+          "item": [
+            {
+              "name": "Z1.1 Switch on BIG-IP DNS (services restart)",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/sys/provision/gtm",
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"level\": \"nominal\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Z2 Portal API user - once",
+          "item": [
+            {
+              "name": "Z2.1 Create portal API user",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/tm/auth/user",
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"{{apiUser}}\",\n  \"password\": \"{{apiUserPassword}}\",\n  \"partitionAccess\": [\n    {\n      \"name\": \"all-partitions\",\n      \"role\": \"manager\"\n    }\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"created (200) or already there (409)\", () => pm.expect([200, 409]).to.include(pm.response.code));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Z3 BIG-IQ only (baseUrl = BIG-IQ)",
+          "item": [
+            {
+              "name": "Z3.1 BIG-IPs managed by this BIG-IQ",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/mgmt/shared/resolver/device-groups/cm-bigip-allBigIpDevices/devices?$select=hostname,address,product,version",
+                "description": ""
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"HTTP 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

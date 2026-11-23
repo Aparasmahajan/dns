@@ -1,0 +1,1904 @@
+{
+  "info": {
+    "name": "F5 BIG-IP DNS - Lab (iControl REST)",
+    "description": "iControl REST calls for the DNS Management Portal F5 integration, for the LAB BIG-IP (BIG-IP VE 21.1.0.1). Set 'password' once (Current value). Every request uses the token header from the collection and signs in automatically when the token is missing or expired.\n\nPostman: Settings > General > turn off 'SSL certificate verification' for the lab self-signed certificate (never for production).\n\nRun order for a full test: 00 > 01 > 02 (create partition) > 04 > 05 > 06 > 07 > 09 > 11 > 12 > 99. Section 04 onwards needs the DNS (GTM) module provisioned (01 > Provisioned modules).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      {
+        "key": "key",
+        "value": "X-F5-Auth-Token",
+        "type": "string"
+      },
+      {
+        "key": "value",
+        "value": "{{token}}",
+        "type": "string"
+      },
+      {
+        "key": "in",
+        "value": "header",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Signs in once and re-signs in when the token is about to expire, so every request just works.",
+          "const url = pm.request.url.toString();",
+          "if (url.includes(\"/mgmt/shared/authn/login\")) { return; }",
+          "const token = pm.collectionVariables.get(\"token\");",
+          "const expiry = Number(pm.collectionVariables.get(\"tokenExpiry\") || 0);",
+          "if (token && Date.now() < expiry) { return; }",
+          "const password = pm.collectionVariables.get(\"password\");",
+          "if (!password) { console.warn(\"Set the collection variable 'password' (Current value) first.\"); return; }",
+          "pm.sendRequest({",
+          "    url: pm.collectionVariables.get(\"baseUrl\") + \"/mgmt/shared/authn/login\",",
+          "    method: \"POST\",",
+          "    header: { \"Content-Type\": \"application/json\" },",
+          "    body: { mode: \"raw\", raw: JSON.stringify({",
+          "        username: pm.collectionVariables.get(\"username\"),",
+          "        password: password,",
+          "        loginProviderName: pm.collectionVariables.get(\"loginProvider\") || \"tmos\" }) }",
+          "}, (err, res) => {",
+          "    if (err || res.code !== 200) { console.error(\"F5 auto-login failed\", err || res.code); return; }",
+          "    const t = res.json().token;",
+          "    pm.collectionVariables.set(\"token\", t.token);",
+          "    pm.collectionVariables.set(\"tokenExpiry\", String(Date.now() + (t.timeout - 60) * 1000));",
+          "});"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://10.1.1.5",
+      "type": "string",
+      "description": "F5 management address (lab)"
+    },
+    {
+      "key": "username",
+      "value": "admin",
+      "type": "string",
+      "description": "F5 user"
+    },
+    {
+      "key": "password",
+      "value": "",
+      "type": "string",
+      "description": "Set the Current value in Postman; keep the Initial value empty so it is never exported"
+    },
+    {
+      "key": "loginProvider",
+      "value": "tmos",
+      "type": "string",
+      "description": "tmos for local F5 accounts"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string",
+      "description": "Filled automatically after login"
+    },
+    {
+      "key": "tokenExpiry",
+      "value": "0",
+      "type": "string",
+      "description": "Filled automatically (epoch ms)"
+    },
+    {
+      "key": "transId",
+      "value": "",
+      "type": "string",
+      "description": "Filled by 'Create transaction'"
+    },
+    {
+      "key": "partition",
+      "value": "Portal_Lab",
+      "type": "string",
+      "description": "Partition used for test objects"
+    },
+    {
+      "key": "datacenter",
+      "value": "DC_Lab",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "key": "server",
+      "value": "srv_lab",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "key": "serverIp",
+      "value": "10.1.20.10",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "key": "vsName",
+      "value": "vs1",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "key": "vsIp",
+      "value": "10.1.20.11",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "key": "vsName2",
+      "value": "vs2",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "key": "vsIp2",
+      "value": "10.1.20.12",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "key": "pool",
+      "value": "pool_lab_a",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "key": "wideip",
+      "value": "app.lab.example",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "key": "nameserver",
+      "value": "ns_lab",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "key": "nameserverIp",
+      "value": "10.1.20.53",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "key": "zone",
+      "value": "lab.example",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "key": "deviceGroup",
+      "value": "dg_lab",
+      "type": "string",
+      "description": "Device group name for config sync"
+    },
+    {
+      "key": "apiUser",
+      "value": "portal_api",
+      "type": "string",
+      "description": "Portal service account"
+    },
+    {
+      "key": "apiUserPassword",
+      "value": "",
+      "type": "string",
+      "description": "Set the Current value in Postman"
+    }
+  ],
+  "item": [
+    {
+      "name": "00 Auth (token)",
+      "description": "Token sign-in. Run 'Login' once, or just run any request: the collection signs in automatically when the token is missing or expired. Tokens last 1200 s by default.",
+      "item": [
+        {
+          "name": "Login - get token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/shared/authn/login",
+            "description": "Returns token.token; the test script stores it in the collection variable 'token'.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\",\n  \"loginProviderName\": \"{{loginProvider}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test(\"login OK\", () => pm.response.to.have.status(200));",
+                  "if (body.token && body.token.token) {",
+                  "    pm.collectionVariables.set(\"token\", body.token.token);",
+                  "    pm.collectionVariables.set(\"tokenExpiry\", String(Date.now() + (body.token.timeout - 60) * 1000));",
+                  "    console.log(\"F5 token stored, valid for \" + body.token.timeout + \" s\");",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get my token details",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/shared/authz/tokens/{{token}}",
+            "description": "Shows timeout and expiry of the current token."
+          }
+        },
+        {
+          "name": "Extend token timeout",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/shared/authz/tokens/{{token}}",
+            "description": "Sets the token lifetime in seconds (max 36000).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"timeout\": 3600\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Logout - delete token",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/shared/authz/tokens/{{token}}",
+            "description": "Ends the session on the BIG-IP. Clear the 'token' variable afterwards."
+          }
+        }
+      ]
+    },
+    {
+      "name": "01 System",
+      "description": "Device information and health.",
+      "item": [
+        {
+          "name": "Device identity - BIG-IP or BIG-IQ",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/shared/identified-devices/config/device-info",
+            "description": "'product' says BIG-IP or BIG-IQ; also version, hostname, management address."
+          }
+        },
+        {
+          "name": "Software version",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/sys/version",
+            "description": ""
+          }
+        },
+        {
+          "name": "Provisioned modules",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/sys/provision?$select=name,level",
+            "description": "'gtm' must be nominal for the BIG-IP DNS calls below."
+          }
+        },
+        {
+          "name": "Provision DNS (GTM) module - LAB ONLY",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/sys/provision/gtm",
+            "description": "LAB ONLY. Switches on BIG-IP DNS. Services restart for a few minutes.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"level\": \"nominal\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Hostname",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/sys/global-settings?$select=hostname",
+            "description": ""
+          }
+        },
+        {
+          "name": "CPU and memory",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/sys/host-info",
+            "description": ""
+          }
+        },
+        {
+          "name": "Failover state",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/sys/failover",
+            "description": ""
+          }
+        },
+        {
+          "name": "Partitions / folders",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/sys/folder?$select=name,fullPath",
+            "description": ""
+          }
+        },
+        {
+          "name": "Management httpd settings (Basic auth, TLS)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/sys/httpd?$select=authPamValidateIp,sslProtocol,sslCiphersuite,maxClients",
+            "description": ""
+          }
+        },
+        {
+          "name": "Save running configuration",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/sys/config",
+            "description": "Writes the running config to disk (like 'tmsh save sys config').",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"command\": \"save\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 Partitions and API user",
+      "description": "Partitions = portal groups. Create a least-privilege account for the portal instead of using admin.",
+      "item": [
+        {
+          "name": "List partitions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/auth/partition",
+            "description": ""
+          }
+        },
+        {
+          "name": "Create partition",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/auth/partition",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{partition}}\",\n  \"description\": \"Created from Postman\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "List users",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/auth/user?$select=name,partitionAccess",
+            "description": ""
+          }
+        },
+        {
+          "name": "Create portal API user",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/auth/user",
+            "description": "Role 'manager' is a starting point; confirm the least-privilege role for GTM objects with F5.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{apiUser}}\",\n  \"password\": \"{{apiUserPassword}}\",\n  \"partitionAccess\": [\n    {\n      \"name\": \"all-partitions\",\n      \"role\": \"manager\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Delete portal API user",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/auth/user/{{apiUser}}",
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 Clustering and sync",
+      "description": "Device trust, device groups and config sync (DC / DR / AZ behaviour).",
+      "item": [
+        {
+          "name": "Devices",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/cm/device?$select=name,managementIp,failoverState,version,configsyncIp",
+            "description": ""
+          }
+        },
+        {
+          "name": "Sync status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/cm/sync-status",
+            "description": ""
+          }
+        },
+        {
+          "name": "Device groups",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/cm/device-group",
+            "description": ""
+          }
+        },
+        {
+          "name": "Traffic groups",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/cm/traffic-group",
+            "description": ""
+          }
+        },
+        {
+          "name": "Config sync to device group",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/cm",
+            "description": "Pushes this device's config to the device group.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"command\": \"run\",\n  \"utilCmdArgs\": \"config-sync to-group {{deviceGroup}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GTM sync group settings",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm/global-settings/general?$select=synchronization,synchronizationGroupName,synchronizeZoneFiles",
+            "description": "Whether GTM sync is on and which sync group this device is in."
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 GTM - Data centers",
+      "description": "Data centers live in /Common.",
+      "item": [
+        {
+          "name": "List data centers",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm/datacenter",
+            "description": ""
+          }
+        },
+        {
+          "name": "Create data center",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm/datacenter",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{datacenter}}\",\n  \"location\": \"Lab\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Get data center",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm/datacenter/~Common~{{datacenter}}",
+            "description": ""
+          }
+        },
+        {
+          "name": "Disable data center",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm/datacenter/~Common~{{datacenter}}",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"disabled\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Enable data center",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm/datacenter/~Common~{{datacenter}}",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"enabled\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 GTM - Servers and virtual servers",
+      "description": "A server holds the virtual servers (IP:port) that pools point to.",
+      "item": [
+        {
+          "name": "List servers",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm/server?$select=name,datacenter,product,addresses",
+            "description": ""
+          }
+        },
+        {
+          "name": "Create server (generic host) with one virtual server",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm/server",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{server}}\",\n  \"datacenter\": \"/Common/{{datacenter}}\",\n  \"product\": \"generic-host\",\n  \"addresses\": [\n    {\n      \"name\": \"{{serverIp}}\"\n    }\n  ],\n  \"virtualServers\": [\n    {\n      \"name\": \"{{vsName}}\",\n      \"destination\": \"{{vsIp}}:80\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Get server",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm/server/~Common~{{server}}",
+            "description": ""
+          }
+        },
+        {
+          "name": "List virtual servers of server",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm/server/~Common~{{server}}/virtual-servers",
+            "description": ""
+          }
+        },
+        {
+          "name": "Add virtual server",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm/server/~Common~{{server}}/virtual-servers",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{vsName2}}\",\n  \"destination\": \"{{vsIp2}}:80\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 GTM - Pools (A / AAAA)",
+      "description": "Pools group the virtual servers (answers) behind a Wide IP.",
+      "item": [
+        {
+          "name": "List A pools with members",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm/pool/a?expandSubcollections=true",
+            "description": ""
+          }
+        },
+        {
+          "name": "List AAAA pools",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm/pool/aaaa",
+            "description": ""
+          }
+        },
+        {
+          "name": "Create A pool with one member",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm/pool/a",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{pool}}\",\n  \"partition\": \"{{partition}}\",\n  \"loadBalancingMode\": \"round-robin\",\n  \"members\": [\n    {\n      \"name\": \"{{server}}:{{vsName}}\",\n      \"partition\": \"Common\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Get A pool",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm/pool/a/~{{partition}}~{{pool}}?expandSubcollections=true",
+            "description": ""
+          }
+        },
+        {
+          "name": "List pool members",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm/pool/a/~{{partition}}~{{pool}}/members",
+            "description": ""
+          }
+        },
+        {
+          "name": "Add pool member",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm/pool/a/~{{partition}}~{{pool}}/members",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{server}}:{{vsName2}}\",\n  \"partition\": \"Common\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Disable pool member",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm/pool/a/~{{partition}}~{{pool}}/members/~Common~{{server}}:{{vsName2}}",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"disabled\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Remove pool member",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm/pool/a/~{{partition}}~{{pool}}/members/~Common~{{server}}:{{vsName2}}",
+            "description": ""
+          }
+        },
+        {
+          "name": "Change load-balancing mode",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm/pool/a/~{{partition}}~{{pool}}",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"loadBalancingMode\": \"global-availability\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 GTM - Wide IPs (A / AAAA)",
+      "description": "A Wide IP is the DNS name; it answers with members of its pools.",
+      "item": [
+        {
+          "name": "List A Wide IPs",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm/wideip/a?$select=name,partition,pools,enabled",
+            "description": ""
+          }
+        },
+        {
+          "name": "List A Wide IPs - page 1 (2 per page)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm/wideip/a?$top=2&$skip=0",
+            "description": "Paging for large inventories: increase $skip."
+          }
+        },
+        {
+          "name": "List A Wide IPs in one partition",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm/wideip/a?$filter=partition+eq+{{partition}}",
+            "description": ""
+          }
+        },
+        {
+          "name": "List AAAA Wide IPs",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm/wideip/aaaa",
+            "description": ""
+          }
+        },
+        {
+          "name": "Create A Wide IP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm/wideip/a",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{wideip}}\",\n  \"partition\": \"{{partition}}\",\n  \"pools\": [\n    {\n      \"name\": \"{{pool}}\",\n      \"partition\": \"{{partition}}\",\n      \"order\": 0\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Get A Wide IP",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm/wideip/a/~{{partition}}~{{wideip}}",
+            "description": ""
+          }
+        },
+        {
+          "name": "Modify A Wide IP (pool LB mode, TTL via persistence)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm/wideip/a/~{{partition}}~{{wideip}}",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"poolLbMode\": \"round-robin\",\n  \"description\": \"Changed from Postman\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Disable A Wide IP",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm/wideip/a/~{{partition}}~{{wideip}}",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"disabled\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Enable A Wide IP",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm/wideip/a/~{{partition}}~{{wideip}}",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"enabled\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 GTM - Listeners, monitors, topology",
+      "description": "Read-only objects the portal shows.",
+      "item": [
+        {
+          "name": "Listeners",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm/listener",
+            "description": ""
+          }
+        },
+        {
+          "name": "All monitor types",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm/monitor",
+            "description": ""
+          }
+        },
+        {
+          "name": "HTTP monitors",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm/monitor/http",
+            "description": ""
+          }
+        },
+        {
+          "name": "Topology records",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm/topology",
+            "description": ""
+          }
+        },
+        {
+          "name": "Regions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm/region",
+            "description": ""
+          }
+        },
+        {
+          "name": "GTM module overview",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm",
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 GTM - Status and statistics",
+      "description": "Availability and request counts for dashboards.",
+      "item": [
+        {
+          "name": "Data center status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm/datacenter/stats",
+            "description": ""
+          }
+        },
+        {
+          "name": "Server status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm/server/stats",
+            "description": ""
+          }
+        },
+        {
+          "name": "A pool status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm/pool/a/stats",
+            "description": ""
+          }
+        },
+        {
+          "name": "A Wide IP status and requests",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm/wideip/a/stats",
+            "description": ""
+          }
+        },
+        {
+          "name": "One Wide IP stats",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm/wideip/a/~{{partition}}~{{wideip}}/stats",
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 DNS zones (DNS Express)",
+      "description": "REST-managed zones. ZoneRunner (BIND) records are NOT available through REST (F5 K14724629).",
+      "item": [
+        {
+          "name": "DNS Express zones",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/ltm/dns/zone",
+            "description": ""
+          }
+        },
+        {
+          "name": "Nameservers (zone masters)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/ltm/dns/nameserver",
+            "description": ""
+          }
+        },
+        {
+          "name": "TSIG keys",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/ltm/dns/tsig-key?$select=name,algorithm",
+            "description": ""
+          }
+        },
+        {
+          "name": "DNS profiles",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/ltm/profile/dns?$select=name,enableDnsExpress,useLocalBind",
+            "description": ""
+          }
+        },
+        {
+          "name": "Create nameserver",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/ltm/dns/nameserver",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{nameserver}}\",\n  \"address\": \"{{nameserverIp}}\",\n  \"port\": 53\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Create DNS Express zone",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/ltm/dns/zone",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{zone}}\",\n  \"dnsExpressServer\": \"/Common/{{nameserver}}\",\n  \"dnsExpressEnabled\": \"yes\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "11 Transactions (several changes together)",
+      "description": "1) Create, 2) send changes with header X-F5-REST-Coordination-Id: {{transId}}, 3) commit. Changes apply all-or-nothing.",
+      "item": [
+        {
+          "name": "1 Create transaction",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/transaction",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.transId) { pm.collectionVariables.set(\"transId\", String(body.transId)); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2 Add change: create A Wide IP (in transaction)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-F5-REST-Coordination-Id",
+                "value": "{{transId}}"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm/wideip/a",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"tx.{{wideip}}\",\n  \"partition\": \"{{partition}}\",\n  \"pools\": [\n    {\n      \"name\": \"{{pool}}\",\n      \"partition\": \"{{partition}}\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "3 List queued changes",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/transaction/{{transId}}/commands",
+            "description": ""
+          }
+        },
+        {
+          "name": "4 Commit transaction",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/transaction/{{transId}}",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"state\": \"VALIDATING\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "5 Transaction status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/transaction/{{transId}}",
+            "description": ""
+          }
+        },
+        {
+          "name": "Cancel transaction",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/transaction/{{transId}}",
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "13 BIG-IQ only (run against a BIG-IQ, not a BIG-IP)",
+      "description": "Use only if SBI manages the BIG-IPs through BIG-IQ: set baseUrl to the BIG-IQ address.",
+      "item": [
+        {
+          "name": "BIG-IQ: managed BIG-IP devices",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/shared/resolver/device-groups/cm-bigip-allBigIpDevices/devices?$select=hostname,address,product,version",
+            "description": "Lists every BIG-IP this BIG-IQ manages. If SBI's DNS devices are here, the portal should go through BIG-IQ."
+          }
+        }
+      ]
+    },
+    {
+      "name": "12 Error behaviour",
+      "description": "What F5 returns on errors (the portal shows these raw, per site).",
+      "item": [
+        {
+          "name": "Object that does not exist (404)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm/wideip/a/~Common~does.not.exist.lab",
+            "description": ""
+          }
+        },
+        {
+          "name": "Duplicate create (409)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm/datacenter",
+            "description": "Run after 'Create data center'.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{datacenter}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Wrong token (401)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-F5-Auth-Token",
+                "value": "invalid-token"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/sys/version",
+            "description": "",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "99 Cleanup (lab)",
+      "description": "Deletes what this collection created, in dependency order.",
+      "item": [
+        {
+          "name": "Delete transaction test Wide IP",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm/wideip/a/~{{partition}}~tx.{{wideip}}",
+            "description": ""
+          }
+        },
+        {
+          "name": "Delete A Wide IP",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm/wideip/a/~{{partition}}~{{wideip}}",
+            "description": ""
+          }
+        },
+        {
+          "name": "Delete A pool",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm/pool/a/~{{partition}}~{{pool}}",
+            "description": ""
+          }
+        },
+        {
+          "name": "Delete server",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm/server/~Common~{{server}}",
+            "description": ""
+          }
+        },
+        {
+          "name": "Delete data center",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/gtm/datacenter/~Common~{{datacenter}}",
+            "description": ""
+          }
+        },
+        {
+          "name": "Delete DNS Express zone",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/ltm/dns/zone/~Common~{{zone}}",
+            "description": ""
+          }
+        },
+        {
+          "name": "Delete nameserver",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/ltm/dns/nameserver/~Common~{{nameserver}}",
+            "description": ""
+          }
+        },
+        {
+          "name": "Delete partition (must be empty)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/mgmt/tm/auth/partition/{{partition}}",
+            "description": ""
+          }
+        }
+      ]
+    }
+  ]
+}
